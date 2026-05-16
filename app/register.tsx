@@ -43,6 +43,12 @@ const DIETARY_PREFS = [
   { id: 'dairy-free', label: '🥛 Dairy-Free', emoji: '🥛' },
 ];
 
+// ─── Validation Constants ──────────────────────────────────────
+const MIN_AGE = 1;
+const MAX_AGE = 120;
+const MIN_WEIGHT = 1;
+const MAX_WEIGHT = 500;
+
 export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -62,6 +68,107 @@ export default function Register() {
 
   const update = (key: string, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }));
+
+  // ─── Age validation ──────────────────────────────────────────
+  const handleAgeChange = (text: string) => {
+    // Only allow whole numbers (no decimals, no negative)
+    const cleaned = text.replace(/[^0-9]/g, '');
+    update('age', cleaned);
+  };
+
+  const validateAge = (): string | null => {
+    if (!form.age || form.age.trim() === '') {
+      return null; // Age is optional
+    }
+    const ageNum = parseInt(form.age, 10);
+    if (isNaN(ageNum)) {
+      return 'Please enter a valid whole number for age.';
+    }
+    if (ageNum < MIN_AGE) {
+      return `Age must be at least ${MIN_AGE}.`;
+    }
+    if (ageNum > MAX_AGE) {
+      return `Age must be ${MAX_AGE} or less.`;
+    }
+    if (form.age.includes('.')) {
+      return 'Age must be a whole number (no decimals).';
+    }
+    return null;
+  };
+
+  // ─── Weight validation ───────────────────────────────────────
+  const handleWeightChange = (text: string) => {
+    // Allow numbers and one decimal point
+    // Reject: multiple dots, negative signs, letters
+    let cleaned = text.replace(/[^0-9.]/g, '');
+    
+    // Only allow one decimal point
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      cleaned = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    // Limit to 1 decimal place
+    if (parts.length === 2 && parts[1].length > 1) {
+      cleaned = parts[0] + '.' + parts[1].substring(0, 1);
+    }
+    
+    update('weight', cleaned);
+  };
+
+  const validateWeight = (): string | null => {
+    if (!form.weight || form.weight.trim() === '') {
+      return null; // Weight is optional
+    }
+    const weightNum = parseFloat(form.weight);
+    if (isNaN(weightNum)) {
+      return 'Please enter a valid number for weight.';
+    }
+    if (weightNum < MIN_WEIGHT) {
+      return `Weight must be at least ${MIN_WEIGHT} kg.`;
+    }
+    if (weightNum > MAX_WEIGHT) {
+      return `Weight must be ${MAX_WEIGHT} kg or less.`;
+    }
+    return null;
+  };
+
+  // ─── Email validation ────────────────────────────────────────
+  const validateEmail = (): string | null => {
+    if (!form.email || form.email.trim() === '') {
+      return 'Email is required.';
+    }
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(form.email)) {
+      return 'Please enter a valid email address.';
+    }
+    return null;
+  };
+
+  // ─── Username validation ─────────────────────────────────────
+  const validateUsername = (): string | null => {
+    if (!form.username || form.username.trim() === '') {
+      return 'Username is required.';
+    }
+    if (form.username.trim().length < 2) {
+      return 'Username must be at least 2 characters.';
+    }
+    if (form.username.trim().length > 30) {
+      return 'Username must be 30 characters or less.';
+    }
+    return null;
+  };
+
+  // ─── Password validation ─────────────────────────────────────
+  const validatePassword = (): string | null => {
+    if (!form.password || form.password.length < 6) {
+      return 'Password must be at least 6 characters.';
+    }
+    if (form.password.length > 128) {
+      return 'Password must be 128 characters or less.';
+    }
+    return null;
+  };
 
   const steps = [
     {
@@ -89,18 +196,37 @@ export default function Register() {
   const handleNext = () => {
     // Validate current step
     if (currentStep === 0) {
-      if (!form.username || !form.email || !form.password) {
-        Alert.alert('Missing Info', 'Please fill in all account details');
+      const usernameError = validateUsername();
+      if (usernameError) {
+        Alert.alert('Invalid Username', usernameError);
         return;
       }
-      if (form.password.length < 6) {
-        Alert.alert('Weak Password', 'Password must be at least 6 characters');
+      const emailError = validateEmail();
+      if (emailError) {
+        Alert.alert('Invalid Email', emailError);
+        return;
+      }
+      const passwordError = validatePassword();
+      if (passwordError) {
+        Alert.alert('Weak Password', passwordError);
+        return;
+      }
+    }
+
+    if (currentStep === 1) {
+      const ageError = validateAge();
+      if (ageError) {
+        Alert.alert('Invalid Age', ageError);
+        return;
+      }
+      const weightError = validateWeight();
+      if (weightError) {
+        Alert.alert('Invalid Weight', weightError);
         return;
       }
     }
 
     if (currentStep < steps.length - 1) {
-      // Animate transition
       Animated.sequence([
         Animated.timing(fadeAnim, {
           toValue: 0,
@@ -139,18 +265,43 @@ export default function Register() {
       setCurrentStep(currentStep - 1);
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     } else {
-      // FIX: Redirect to index.tsx (onboarding) instead of using router.back()
       router.replace('/');
     }
   };
 
   const handleRegister = async () => {
-    if (!form.username || !form.email || !form.password) {
-      Alert.alert('Missing Info', 'Username, email, and password are required.');
+    // Final validation before submit
+    const usernameError = validateUsername();
+    if (usernameError) {
+      Alert.alert('Invalid Username', usernameError);
       return;
     }
-    if (form.password.length < 6) {
-      Alert.alert('Weak Password', 'Password must be at least 6 characters.');
+    const emailError = validateEmail();
+    if (emailError) {
+      Alert.alert('Invalid Email', emailError);
+      return;
+    }
+    const passwordError = validatePassword();
+    if (passwordError) {
+      Alert.alert('Weak Password', passwordError);
+      return;
+    }
+
+    // Parse age and weight safely
+    const parsedAge = form.age && form.age.trim() !== '' 
+      ? parseInt(form.age, 10) 
+      : undefined;
+    const parsedWeight = form.weight && form.weight.trim() !== '' 
+      ? parseFloat(form.weight) 
+      : undefined;
+
+    // Validate parsed values
+    if (parsedAge !== undefined && (isNaN(parsedAge) || parsedAge < MIN_AGE || parsedAge > MAX_AGE)) {
+      Alert.alert('Invalid Age', `Age must be between ${MIN_AGE} and ${MAX_AGE}.`);
+      return;
+    }
+    if (parsedWeight !== undefined && (isNaN(parsedWeight) || parsedWeight < MIN_WEIGHT || parsedWeight > MAX_WEIGHT)) {
+      Alert.alert('Invalid Weight', `Weight must be between ${MIN_WEIGHT} and ${MAX_WEIGHT} kg.`);
       return;
     }
 
@@ -161,11 +312,11 @@ export default function Register() {
         {
           method: 'POST',
           body: JSON.stringify({
-            username: form.username,
-            email: form.email,
+            username: form.username.trim(),
+            email: form.email.trim(),
             password: form.password,
-            age: form.age ? parseInt(form.age) : undefined,
-            weight: form.weight ? parseFloat(form.weight) : undefined,
+            age: parsedAge,
+            weight: parsedWeight,
             health_goal: form.healthGoal || undefined,
             dietary_preference: form.dietaryPreference || undefined,
           }),
@@ -182,7 +333,7 @@ export default function Register() {
         '/api/auth/login',
         {
           method: 'POST',
-          body: JSON.stringify({ email: form.email, password: form.password }),
+          body: JSON.stringify({ email: form.email.trim(), password: form.password }),
         },
         false
       );
@@ -202,8 +353,8 @@ export default function Register() {
         id: loginRes.data.user.id,
         username: loginRes.data.user.username,
         email: loginRes.data.user.email,
-        age: form.age ? parseInt(form.age) : undefined,
-        weight: form.weight ? parseFloat(form.weight) : undefined,
+        age: parsedAge,
+        weight: parsedWeight,
         healthGoals: form.healthGoal ? [form.healthGoal] : [],
         dietaryPreferences: form.dietaryPreference ? [form.dietaryPreference] : [],
         createdAt: new Date().toISOString(),
@@ -233,6 +384,7 @@ export default function Register() {
                   placeholderTextColor="#94a3b8"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  maxLength={30}
                 />
               </View>
             </View>
@@ -250,6 +402,7 @@ export default function Register() {
                   autoCapitalize="none"
                 />
               </View>
+              <Text style={styles.fieldHint}>We'll never share your email.</Text>
             </View>
 
             <View style={styles.inputGroup}>
@@ -268,6 +421,7 @@ export default function Register() {
                   <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color="#94a3b8" />
                 </TouchableOpacity>
               </View>
+              <Text style={styles.fieldHint}>Must be at least 6 characters.</Text>
             </View>
           </Animated.View>
         );
@@ -281,12 +435,14 @@ export default function Register() {
                 <TextInput
                   style={styles.iconTextField}
                   value={form.age}
-                  onChangeText={t => update('age', t)}
-                  placeholder="Age"
+                  onChangeText={handleAgeChange}
+                  placeholder="Age (optional)"
                   placeholderTextColor="#94a3b8"
-                  keyboardType="numeric"
+                  keyboardType="number-pad"
+                  maxLength={3}
                 />
               </View>
+              <Text style={styles.fieldHint}>Whole numbers only · {MIN_AGE}–{MAX_AGE} years</Text>
             </View>
 
             <View style={styles.inputGroup}>
@@ -295,12 +451,21 @@ export default function Register() {
                 <TextInput
                   style={styles.iconTextField}
                   value={form.weight}
-                  onChangeText={t => update('weight', t)}
-                  placeholder="Weight (kg)"
+                  onChangeText={handleWeightChange}
+                  placeholder="Weight in kg (optional)"
                   placeholderTextColor="#94a3b8"
                   keyboardType="decimal-pad"
+                  maxLength={6}
                 />
               </View>
+              <Text style={styles.fieldHint}>Accepts one decimal place · {MIN_WEIGHT}–{MAX_WEIGHT} kg</Text>
+            </View>
+
+            <View style={styles.infoBox}>
+              <Feather name="info" size={16} color="#64748b" />
+              <Text style={styles.infoText}>
+                Age and weight are optional. We use them to personalize your health recommendations.
+              </Text>
             </View>
           </Animated.View>
         );
@@ -372,7 +537,6 @@ export default function Register() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
-      {/* Progress Bar */}
       <View style={styles.progressContainer}>
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
@@ -392,16 +556,13 @@ export default function Register() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.stepTitle}>{steps[currentStep].title}</Text>
             <Text style={styles.stepSubtitle}>{steps[currentStep].subtitle}</Text>
           </View>
 
-          {/* Step Content */}
           {renderStepContent()}
 
-          {/* Navigation Buttons */}
           <View style={styles.navigationButtons}>
             <TouchableOpacity
               style={[styles.nextButton, loading && styles.nextButtonDisabled]}
@@ -421,7 +582,6 @@ export default function Register() {
             </TouchableOpacity>
           </View>
 
-          {/* Login Link for first step */}
           {currentStep === 0 && (
             <View style={styles.loginRow}>
               <Text style={styles.loginText}>Already have an account? </Text>
@@ -511,6 +671,28 @@ const styles = StyleSheet.create({
     fontSize: 17,
     paddingVertical: 18,
     color: '#0f172a',
+  },
+  fieldHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 18,
+    flex: 1,
   },
   optionsGrid: {
     gap: 12,

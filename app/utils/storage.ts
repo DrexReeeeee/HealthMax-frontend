@@ -126,3 +126,6 @@ export const getScans = getLocalScans;
 export async function clearLocalScans() {
   await AsyncStorage.removeItem('local_scans');
 }
+export async function clearAuth() {
+  await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user_id']);
+}

@@ -14,64 +14,46 @@ import {
   View,
 } from "react-native";
 import { MaterialCommunityIcons as Icon } from "@expo/vector-icons";
-import { fetchProduct, saveScan } from "./utils/api";
+import { fetchProduct, saveScan, type ProductData, type Alternative } from "./utils/api";
 
 const { width, height } = Dimensions.get("window");
-
-// ── Types ──────────────────────────────────────────────────
-interface Alternative {
-  barcode: string;
-  name: string;
-  brand: string;
-  image_url?: string;
-  base_score: number;
-}
-
-// Shape returned by your backend GET /api/product/:barcode
-interface ProductData {
-  barcode: string;
-  name: string;
-  brand: string;
-  category: string;
-  image_url: string;
-  nutrients: {
-    sugar?: number;
-    salt?: number;
-    saturated_fat?: number;
-    fiber?: number;
-    calories?: number;
-  };
-  score: number;
-  score_color: string;
-  warnings: string[];
-  alternatives: Alternative[];
-}
 
 type ScanState = "idle" | "loading" | "result" | "error";
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-// ── Score helpers ──────────────────────────────────────────
 function getScoreLabel(score: number): { label: string; color: string; bg: string } {
   if (score >= 75) return { label: "Great Choice", color: "#16a34a", bg: "#f0fdf4" };
-  if (score >= 50) return { label: "Decent",       color: "#ca8a04", bg: "#fefce8" };
-  if (score >= 25) return { label: "Not Ideal",    color: "#ea580c", bg: "#fff7ed" };
+  if (score >= 60) return { label: "Decent",       color: "#ca8a04", bg: "#fefce8" };
+  if (score >= 45) return { label: "Not Ideal",    color: "#ea580c", bg: "#fff7ed" };
   return             { label: "Avoid",             color: "#dc2626", bg: "#fef2f2" };
 }
 
-// ── Sub-components ─────────────────────────────────────────
+function gradeColor(grade: string): string {
+  return { A: "#16a34a", B: "#65a30d", C: "#ca8a04", D: "#ea580c", E: "#dc2626" }[grade] ?? "#64748b";
+}
+
+function getMultiplierColor(multiplier: number): { color: string; bg: string; border: string } {
+  if (multiplier >= 5) return { color: "#7c3aed", bg: "#f5f3ff", border: "#c4b5fd" };
+  if (multiplier >= 3) return { color: "#dc2626", bg: "#fef2f2", border: "#fca5a5" };
+  if (multiplier >= 2) return { color: "#ea580c", bg: "#fff7ed", border: "#fdba74" };
+  return                      { color: "#ca8a04", bg: "#fefce8", border: "#fde047" };
+}
+
 const NutrientRow = ({
   label,
   value,
   unit,
 }: {
   label: string;
-  value?: number;
+  value?: number | null;
   unit: string;
 }) => (
   <View style={styles.nutriRow}>
     <Text style={styles.nutriLabel}>{label}</Text>
     <Text style={styles.nutriValue}>
-      {value !== undefined && value !== null ? `${value.toFixed(1)} ${unit}` : "—"}
+      {value !== undefined && value !== null && !isNaN(value)
+        ? `${value.toFixed(1)} ${unit}`
+        : "—"}
     </Text>
   </View>
 );
@@ -98,15 +80,17 @@ const AlternativeCard = ({
     <View style={styles.altInfo}>
       <Text style={styles.altName} numberOfLines={2}>{item.name}</Text>
       <Text style={styles.altBrand}>{item.brand}</Text>
+      {item.reason ? (
+        <Text style={styles.altReason} numberOfLines={2}>{item.reason}</Text>
+      ) : null}
     </View>
     <View style={styles.altScoreBadge}>
-      <Text style={styles.altScoreText}>{item.base_score}</Text>
+      <Text style={styles.altScoreText}>{item.score}</Text>
       <Icon name="chevron-right" size={14} color="#10b981" />
     </View>
   </TouchableOpacity>
 );
 
-// ── Main Screen ────────────────────────────────────────────
 export default function ScannerScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanState, setScanState]         = useState<ScanState>("idle");
@@ -115,13 +99,21 @@ export default function ScannerScreen() {
   const [lastBarcode, setLastBarcode]     = useState("");
   const [saveState, setSaveState]         = useState<SaveState>("idle");
 
+  // ── Streak bonus toast state ───────────────────────────────
+  const [streakBonus, setStreakBonus] = useState<{
+    multiplier: number;
+    points_earned: number;
+    current_streak: number;
+  } | null>(null);
+  const bonusAnim  = useRef(new Animated.Value(0)).current;
+  const bonusScale = useRef(new Animated.Value(0.8)).current;
+
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const router    = useRouter();
 
-  // Camera permission
   useEffect(() => {
     (async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
@@ -129,7 +121,6 @@ export default function ScannerScreen() {
     })();
   }, []);
 
-  // Scanner line pulse
   useEffect(() => {
     if (scanState === "idle") {
       Animated.loop(
@@ -143,7 +134,25 @@ export default function ScannerScreen() {
     }
   }, [scanState]);
 
-  // ── Sheet helpers ────────────────────────────────────────
+  // ── Animate bonus toast in then auto-dismiss ──────────────
+  const showBonusToast = (multiplier: number, points_earned: number, current_streak: number) => {
+    setStreakBonus({ multiplier, points_earned, current_streak });
+    bonusAnim.setValue(0);
+    bonusScale.setValue(0.8);
+
+    Animated.parallel([
+      Animated.spring(bonusAnim,  { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }),
+      Animated.spring(bonusScale, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }),
+    ]).start();
+
+    // Auto-dismiss after 4 seconds
+    setTimeout(() => {
+      Animated.timing(bonusAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+        setStreakBonus(null);
+      });
+    }, 4000);
+  };
+
   const showSheet = () => {
     Animated.parallel([
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 12 }),
@@ -160,18 +169,18 @@ export default function ScannerScreen() {
       setScanState("idle");
       setLastBarcode("");
       setSaveState("idle");
+      setStreakBonus(null);
       callback?.();
     });
   };
 
-  // ── Load product from YOUR backend ──────────────────────
-  // This gives us score, warnings, AND alternatives in one call.
   const loadProduct = async (barcode: string) => {
     setScanState("loading");
     setErrorMsg("");
     setSaveState("idle");
+    setStreakBonus(null);
     try {
-      const p = await fetchProduct(barcode); // GET /api/product/:barcode
+      const p = await fetchProduct(barcode);
       setProduct(p);
       setScanState("result");
       showSheet();
@@ -181,26 +190,37 @@ export default function ScannerScreen() {
     }
   };
 
-  // ── Barcode scanned ──────────────────────────────────────
   const handleBarcodeScanned = ({ data }: { type: string; data: string }) => {
     if (data === lastBarcode || scanState === "loading") return;
     setLastBarcode(data);
     loadProduct(data);
   };
 
-  // ── Save to history ──────────────────────────────────────
   const handleSave = async () => {
     if (!product || saveState === "saving" || saveState === "saved") return;
-
     setSaveState("saving");
     Animated.sequence([
       Animated.timing(scaleAnim, { toValue: 0.95, duration: 80, useNativeDriver: true }),
       Animated.timing(scaleAnim, { toValue: 1,    duration: 80, useNativeDriver: true }),
     ]).start();
-
     try {
-      await saveScan(product.barcode, product.score);
+      const result = await saveScan(
+        product.barcode,
+        product.evaluation.score,
+        product,
+        product.alternatives,
+        product.description,
+        product.warnings,
+        product.tips,
+      );
+
       setSaveState("saved");
+
+      // ── Show streak bonus toast if multiplier > 1 ──────────
+      const gam = result?.gamification as any;
+      if (gam?.multiplier > 1 && gam?.points_earned > 0) {
+        showBonusToast(gam.multiplier, gam.points_earned, gam.current_streak);
+      }
     } catch (err: any) {
       setSaveState("error");
       Alert.alert("Save Failed", err.message || "Could not save. Please try again.");
@@ -208,12 +228,10 @@ export default function ScannerScreen() {
     }
   };
 
-  // ── Tap an alternative ───────────────────────────────────
   const handleLoadAlternative = (barcode: string) => {
     hideSheet(() => loadProduct(barcode));
   };
 
-  // ── Permission screens ───────────────────────────────────
   if (hasPermission === null) {
     return (
       <View style={styles.permissionContainer}>
@@ -232,9 +250,12 @@ export default function ScannerScreen() {
     );
   }
 
-  const isIdle     = scanState === "idle";
-  const scoreInfo  = product ? getScoreLabel(product.score) : null;
-  const showAlts   = (product?.score ?? 100) < 50 && (product?.alternatives?.length ?? 0) > 0;
+  const isIdle    = scanState === "idle";
+  const score     = product?.evaluation?.score ?? 0;
+  const scoreInfo = product ? getScoreLabel(score) : null;
+
+  const showAltsSection = score < 95;
+  const hasAlts = (product?.alternatives?.length ?? 0) > 0;
 
   const saveCfg = {
     idle:   { icon: "content-save-outline" as const, text: "Save to History",    color: "#10b981", bg: "#f0fdf4", border: "#10b981" },
@@ -245,7 +266,6 @@ export default function ScannerScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Camera */}
       <CameraView
         style={StyleSheet.absoluteFill}
         onBarcodeScanned={isIdle ? handleBarcodeScanned : undefined}
@@ -254,9 +274,7 @@ export default function ScannerScreen() {
         }}
       />
 
-      {/* Overlay */}
       <View style={styles.overlay}>
-        {/* Top bar */}
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
             <Icon name="arrow-left" size={22} color="#fff" />
@@ -265,16 +283,13 @@ export default function ScannerScreen() {
           <View style={{ width: 44 }} />
         </View>
 
-        {/* Viewfinder */}
         <View style={styles.viewfinderWrapper}>
           <View style={styles.viewfinder}>
             <View style={[styles.corner, styles.cornerTL]} />
             <View style={[styles.corner, styles.cornerTR]} />
             <View style={[styles.corner, styles.cornerBL]} />
             <View style={[styles.corner, styles.cornerBR]} />
-
             {isIdle && <Animated.View style={[styles.scanLine, { opacity: pulseAnim }]} />}
-
             {scanState === "loading" && (
               <View style={styles.loadingOverlay}>
                 <ActivityIndicator size="large" color="#10b981" />
@@ -284,7 +299,6 @@ export default function ScannerScreen() {
           </View>
         </View>
 
-        {/* Bottom hint */}
         <View style={styles.bottomHint}>
           {scanState === "error" ? (
             <View style={styles.errorCard}>
@@ -308,50 +322,60 @@ export default function ScannerScreen() {
         </View>
       </View>
 
-      {/* ── Result Bottom Sheet ── */}
       {scanState === "result" && product && (
         <>
-          {/* Backdrop */}
           <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              onPress={() => hideSheet()}
-              activeOpacity={1}
-            />
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => hideSheet()} activeOpacity={1} />
           </Animated.View>
 
-          {/* Sheet */}
           <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.sheetHandle} />
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
 
-              {/* ── Score banner ── */}
               {scoreInfo && (
                 <View style={[styles.scoreBanner, { backgroundColor: scoreInfo.bg, borderColor: scoreInfo.color + "33" }]}>
                   <View style={styles.scoreBannerLeft}>
-                    <Text style={[styles.scoreBannerLabel, { color: scoreInfo.color }]}>
-                      {scoreInfo.label}
-                    </Text>
+                    <View style={styles.scoreLabelRow}>
+                      <Text style={[styles.scoreBannerLabel, { color: scoreInfo.color }]}>
+                        {scoreInfo.label}
+                      </Text>
+                      <View style={[styles.gradePill, { backgroundColor: gradeColor(product.evaluation.grade) }]}>
+                        <Text style={styles.gradePillText}>{product.evaluation.grade}</Text>
+                      </View>
+                      {product.nutriscore && (
+                        <View style={[styles.gradePill, { backgroundColor: "#64748b" }]}>
+                          <Text style={styles.gradePillText}>NS {product.nutriscore}</Text>
+                        </View>
+                      )}
+                    </View>
                     {product.warnings.length > 0 && (
                       <View style={styles.warningsList}>
                         {product.warnings.map((w, i) => (
                           <View key={i} style={styles.warningRow}>
-                            <Icon name="alert" size={12} color={scoreInfo.color} />
                             <Text style={[styles.warningText, { color: scoreInfo.color }]}>{w}</Text>
                           </View>
                         ))}
                       </View>
                     )}
+                    {product.description ? (
+                      <Text style={styles.descriptionText}>{product.description}</Text>
+                    ) : null}
+                    {product.tips?.length > 0 && (
+                      <View style={styles.tipsList}>
+                        {product.tips.map((t, i) => (
+                          <Text key={i} style={styles.tipText}>{t}</Text>
+                        ))}
+                      </View>
+                    )}
                   </View>
                   <View style={[styles.scoreCircle, { borderColor: scoreInfo.color }]}>
-                    <Text style={[styles.scoreNumber, { color: scoreInfo.color }]}>{product.score}</Text>
-                    <Text style={[styles.scoreMax,    { color: scoreInfo.color + "99" }]}>/100</Text>
+                    <Text style={[styles.scoreNumber, { color: scoreInfo.color }]}>{score}</Text>
+                    <Text style={[styles.scoreMax, { color: scoreInfo.color + "99" }]}>/100</Text>
                   </View>
                 </View>
               )}
 
-              {/* ── Product header ── */}
               <View style={styles.productHeader}>
                 {product.image_url ? (
                   <Image source={{ uri: product.image_url }} style={styles.productImage} resizeMode="contain" />
@@ -367,45 +391,113 @@ export default function ScannerScreen() {
                 </View>
               </View>
 
-              {/* Barcode chip */}
               <View style={styles.barcodeChip}>
                 <Icon name="barcode" size={14} color="#64748b" />
                 <Text style={styles.barcodeText}>{product.barcode}</Text>
               </View>
 
-              {/* ── Nutrition ── */}
               <View style={styles.sectionBox}>
                 <Text style={styles.sectionTitle}>Nutrition per 100g</Text>
-                <NutrientRow label="Calories"       value={product.nutrients.calories}      unit="kcal" />
-                <NutrientRow label="Sugar"          value={product.nutrients.sugar}          unit="g" />
-                <NutrientRow label="Salt"           value={product.nutrients.salt}           unit="g" />
-                <NutrientRow label="Saturated fat"  value={product.nutrients.saturated_fat}  unit="g" />
-                <NutrientRow label="Fibre"          value={product.nutrients.fiber}          unit="g" />
+                <NutrientRow label="Calories"      value={product.nutrients.energy_kcal}    unit="kcal" />
+                <NutrientRow label="Sugar"         value={product.nutrients.sugar_g}         unit="g" />
+                <NutrientRow label="Sodium"        value={product.nutrients.sodium_mg != null
+                                                          ? product.nutrients.sodium_mg / 1000
+                                                          : null}                            unit="g" />
+                <NutrientRow label="Saturated fat" value={product.nutrients.saturated_fat_g} unit="g" />
+                <NutrientRow label="Fibre"         value={product.nutrients.fiber_g}         unit="g" />
+                <NutrientRow label="Protein"       value={product.nutrients.protein_g}       unit="g" />
+                {product.nutrients.nova_group && (
+                  <View style={styles.nutriRow}>
+                    <Text style={styles.nutriLabel}>NOVA group</Text>
+                    <Text style={[
+                      styles.nutriValue,
+                      { color: product.nutrients.nova_group === 4 ? "#dc2626"
+                              : product.nutrients.nova_group === 3 ? "#ea580c"
+                              : "#16a34a" }
+                    ]}>
+                      {product.nutrients.nova_group} / 4
+                    </Text>
+                  </View>
+                )}
+                {product.nutrients.additives_count > 0 && (
+                  <View style={styles.nutriRow}>
+                    <Text style={styles.nutriLabel}>Additives</Text>
+                    <Text style={[styles.nutriValue, { color: product.nutrients.additives_count > 5 ? "#dc2626" : "#ea580c" }]}>
+                      {product.nutrients.additives_count}
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              {/* ── Healthier alternatives (score < 50 only) ── */}
-              {showAlts && (
+              {showAltsSection && (
                 <View style={styles.altSection}>
                   <View style={styles.altHeader}>
                     <Icon name="leaf" size={16} color="#10b981" />
                     <Text style={styles.altTitle}>Healthier Alternatives</Text>
                   </View>
-                  <Text style={styles.altSubtitle}>
-                    Same category, better score — tap to inspect:
-                  </Text>
-                  {product.alternatives.map((alt) => (
-                    <AlternativeCard
-                      key={alt.barcode}
-                      item={alt}
-                      onPress={handleLoadAlternative}
-                    />
-                  ))}
+                  {hasAlts ? (
+                    <>
+                      <Text style={styles.altSubtitle}>
+                        Same category, better score — tap to inspect:
+                      </Text>
+                      {product.alternatives.map((alt) => (
+                        <AlternativeCard key={alt.barcode} item={alt} onPress={handleLoadAlternative} />
+                      ))}
+                    </>
+                  ) : (
+                    <View style={styles.noAltsContainer}>
+                      <Icon name="magnify-close" size={32} color="#86efac" />
+                      <Text style={styles.noAltsTitle}>No alternatives found</Text>
+                      <Text style={styles.noAltsSubtitle}>
+                        We couldn't find a healthier option in this category right now. Try again later or scan a different product.
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 
-              {/* ── Action row ── */}
+              {/* ── Streak Bonus Toast ───────────────────────────────── */}
+              {streakBonus && (() => {
+                    const mc = getMultiplierColor(streakBonus.multiplier);
+                    return (
+                      <Animated.View
+                        style={[
+                          styles.bonusToast,
+                          { backgroundColor: mc.bg, borderColor: mc.border },
+                          {
+                            opacity: bonusAnim,
+                            transform: [
+                              { scale: bonusScale },
+                              {
+                                translateY: bonusAnim.interpolate({
+                                  inputRange:  [0, 1],
+                                  outputRange: [20, 0],
+                                }),
+                              },
+                            ],
+                          },
+                        ]}
+                      >
+                        <View style={styles.bonusLeft}>
+                          <Text style={styles.bonusEmoji}>🔥</Text>
+                          <View style={styles.bonusTextGroup}>
+                            <Text style={[styles.bonusTitle, { color: mc.color }]}>
+                              {streakBonus.multiplier}x Streak Bonus!
+                            </Text>
+                            <Text style={[styles.bonusSub, { color: mc.color + "bb" }]}>
+                              {streakBonus.current_streak}-day streak · keep it up!
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={[styles.bonusPointsBadge, { backgroundColor: mc.color }]}>
+                          <Text style={styles.bonusPointsText}>+{streakBonus.points_earned}</Text>
+                          <Text style={styles.bonusPointsLabel}>pts</Text>
+                        </View>
+                      </Animated.View>
+                    );
+                  })()}
+
               <View style={styles.actionRow}>
-                {/* Save button */}
                 <Animated.View style={[{ flex: 1 }, { transform: [{ scale: scaleAnim }] }]}>
                   <TouchableOpacity
                     style={[styles.saveBtn, { backgroundColor: saveCfg.bg, borderColor: saveCfg.border }]}
@@ -424,7 +516,6 @@ export default function ScannerScreen() {
                   </TouchableOpacity>
                 </Animated.View>
 
-                {/* Scan again */}
                 <TouchableOpacity
                   style={styles.scanAgainBtn}
                   onPress={() => hideSheet()}
@@ -442,7 +533,6 @@ export default function ScannerScreen() {
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────
 const VIEWFINDER_SIZE  = width * 0.72;
 const CORNER_SIZE      = 24;
 const CORNER_THICKNESS = 3;
@@ -493,18 +583,22 @@ const styles = StyleSheet.create({
   sheetHandle:  { width: 40, height: 4, backgroundColor: "#e2e8f0", borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 4 },
   sheetContent: { paddingHorizontal: 20, paddingBottom: 40 },
 
-  // Score banner
-  scoreBanner:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 4, borderWidth: 1 },
+  scoreBanner:      { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 4, borderWidth: 1 },
   scoreBannerLeft:  { flex: 1, gap: 6 },
+  scoreLabelRow:    { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   scoreBannerLabel: { fontSize: 16, fontWeight: "800" },
+  gradePill:        { borderRadius: 20, paddingVertical: 2, paddingHorizontal: 8 },
+  gradePillText:    { fontSize: 11, fontWeight: "800", color: "#fff" },
   warningsList:     { gap: 4 },
-  warningRow:       { flexDirection: "row", alignItems: "center", gap: 5 },
-  warningText:      { fontSize: 12, fontWeight: "500" },
+  warningRow:       { flexDirection: "row", alignItems: "flex-start", gap: 5 },
+  warningText:      { fontSize: 12, fontWeight: "500", flex: 1 },
+  descriptionText:  { fontSize: 13, color: '#374151', lineHeight: 19, fontWeight: '400', marginTop: 2 },
+  tipsList:         { gap: 4, marginTop: 4 },
+  tipText:          { fontSize: 12, color: "#0369a1", fontWeight: "500" },
   scoreCircle:      { width: 60, height: 60, borderRadius: 30, borderWidth: 2.5, alignItems: "center", justifyContent: "center", marginLeft: 12 },
   scoreNumber:      { fontSize: 22, fontWeight: "900", lineHeight: 24 },
   scoreMax:         { fontSize: 10, fontWeight: "600" },
 
-  // Product header
   productHeader:           { flexDirection: "row", gap: 14, paddingVertical: 16, alignItems: "flex-start" },
   productImage:            { width: 80, height: 80, borderRadius: 12, backgroundColor: "#f1f5f9" },
   productImagePlaceholder: { width: 80, height: 80, borderRadius: 12, backgroundColor: "#f1f5f9", alignItems: "center", justifyContent: "center" },
@@ -516,14 +610,12 @@ const styles = StyleSheet.create({
   barcodeChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f1f5f9", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12, alignSelf: "flex-start", marginBottom: 16 },
   barcodeText: { fontSize: 12, color: "#64748b", fontWeight: "500", letterSpacing: 0.5 },
 
-  // Nutrition
   sectionBox:   { backgroundColor: "#f8fafc", borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#e2e8f0" },
   sectionTitle: { fontSize: 14, fontWeight: "800", color: "#1e293b", marginBottom: 12, letterSpacing: -0.2 },
   nutriRow:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" },
   nutriLabel:   { fontSize: 13, color: "#475569", fontWeight: "500" },
   nutriValue:   { fontSize: 13, color: "#1e293b", fontWeight: "700" },
 
-  // Alternatives
   altSection:  { backgroundColor: "#f0fdf4", borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#bbf7d0" },
   altHeader:   { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
   altTitle:    { fontSize: 14, fontWeight: "800", color: "#166534" },
@@ -538,10 +630,29 @@ const styles = StyleSheet.create({
   altInfo:       { flex: 1 },
   altName:       { fontSize: 13, fontWeight: "700", color: "#1e293b", lineHeight: 18 },
   altBrand:      { fontSize: 11, color: "#64748b", fontWeight: "500", marginTop: 2 },
+  altReason:     { fontSize: 11, color: "#16a34a", fontWeight: "500", marginTop: 3, lineHeight: 15 },
   altScoreBadge: { flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#dcfce7", borderRadius: 20, paddingVertical: 4, paddingHorizontal: 10 },
   altScoreText:  { fontSize: 13, fontWeight: "800", color: "#16a34a" },
 
-  // Actions
+  noAltsContainer: { alignItems: "center", paddingVertical: 20, gap: 8 },
+  noAltsTitle:     { fontSize: 14, fontWeight: "700", color: "#166534" },
+  noAltsSubtitle:  { fontSize: 12, color: "#16a34a", textAlign: "center", lineHeight: 18, fontWeight: "400" },
+
+  // ── Streak bonus toast ──────────────────────────────────────
+  bonusToast: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderRadius: 16, padding: 14, marginBottom: 12,
+    borderWidth: 1.5,
+  },
+  bonusLeft:        { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  bonusEmoji:       { fontSize: 28 },
+  bonusTextGroup:   { flex: 1, gap: 2 },
+  bonusTitle:       { fontSize: 15, fontWeight: "800" },
+  bonusSub:         { fontSize: 12, fontWeight: "500" },
+  bonusPointsBadge: { borderRadius: 12, paddingVertical: 6, paddingHorizontal: 12, alignItems: "center", minWidth: 52 },
+  bonusPointsText:  { fontSize: 18, fontWeight: "900", color: "#fff" },
+  bonusPointsLabel: { fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.8)" },
+
   actionRow: { flexDirection: "row", gap: 10, marginTop: 8 },
   saveBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,

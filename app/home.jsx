@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+
 import {
   Animated,
   Dimensions,
@@ -15,8 +16,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { getUserProfile, saveDashboardCache, getDashboardCache } from './utils/storage';
-import { fetchDashboard } from './utils/api';
+import { getUserProfile, saveDashboardCache, getDashboardCache, getUser } from './utils/storage';
+import { fetchDashboard, apiFetch } from './utils/api';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +28,7 @@ const DEFAULT_DASHBOARD = {
   current_streak: 0,
   longest_streak: 0,
   total_points: 0,
+  streak_status: null,
 };
 
 // ── Stat Card ──────────────────────────────────────────────
@@ -115,25 +117,22 @@ export default function HomeScreen() {
   const floatAnim2 = useRef(new Animated.Value(0)).current;
   const floatAnim3 = useRef(new Animated.Value(0)).current;
 
-  // Load cached dashboard first so numbers appear instantly,
-  // then fire the real API call in the background.
   const loadDashboard = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) {
         setRefreshing(true);
       } else {
-        // Show cached data immediately while network loads
         const cached = await getDashboardCache();
         if (cached) {
           setDashboard(cached);
-          setLoading(false); // cached data is good enough to stop showing placeholders
+          setLoading(false);
         }
       }
 
       setError(null);
       const data = await fetchDashboard();
       setDashboard(data);
-      await saveDashboardCache(data); // update cache for next open
+      await saveDashboardCache(data);
     } catch (err) {
       setError('Could not load dashboard — tap to retry');
       console.log('Dashboard error:', err.message);
@@ -145,17 +144,31 @@ export default function HomeScreen() {
 
   const loadUserProfile = useCallback(async () => {
     try {
-      const profile = await getUserProfile();
-      if (profile?.username) setUsername(profile.username);
+      const user = await getUser();
+      if (user?.username) {
+        setUsername(user.username);
+        return;
+      }
+
+      const { ok, data } = await apiFetch('/api/profile', { method: 'GET' }, true);
+      if (ok && data?.profile?.username) {
+        setUsername(data.profile.username);
+      }
     } catch (err) {
       console.log('Profile error:', err);
     }
   }, []);
 
-  useEffect(() => {
-    loadUserProfile();
-    loadDashboard();
+  // ── Reload data every time this screen comes into focus ──
+  useFocusEffect(
+    useCallback(() => {
+      loadUserProfile();
+      loadDashboard();
+    }, [loadUserProfile, loadDashboard])
+  );
 
+  // ── Animations run once on mount only ───────────────────
+  useEffect(() => {
     Animated.timing(headerAnim, { toValue: 1, duration: 700, useNativeDriver: true }).start();
 
     const createFloatAnimation = (animValue, delayTime) => {
@@ -178,8 +191,10 @@ export default function HomeScreen() {
   const floatTranslate3 = floatAnim3.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
   const headerTranslateY = headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] });
 
-  const healthScore = `${Math.round(dashboard.healthy_percentage)}%`;
-  const streakLabel = `${dashboard.current_streak} day${dashboard.current_streak !== 1 ? 's' : ''}`;
+  // ── Streak: show 0 if streak was broken ─────────────────
+  const displayStreak = dashboard.streak_status === 'broken' ? 0 : dashboard.current_streak;
+  const streakLabel   = `${displayStreak} day${displayStreak !== 1 ? 's' : ''}`;
+  const healthScore   = `${Math.round(dashboard.healthy_percentage)}%`;
 
   return (
     <View style={styles.root}>
@@ -258,9 +273,9 @@ export default function HomeScreen() {
 
           {/* Stat Cards */}
           <View style={styles.statRow}>
-            <StatCard icon="barcode-scan" value={String(dashboard.total_scans)} label="Total Scans" delay={100} loading={loading} />
-            <StatCard icon="heart-pulse" value={healthScore} label="Health Score" delay={180} loading={loading} />
-            <StatCard icon="fire" value={String(dashboard.current_streak)} label="Day Streak" delay={260} loading={loading} />
+            <StatCard icon="barcode-scan"  value={String(dashboard.total_scans)} label="Total Scans"  delay={100} loading={loading} />
+            <StatCard icon="heart-pulse"   value={healthScore}                   label="Health Score" delay={180} loading={loading} />
+            <StatCard icon="fire"          value={String(displayStreak)}         label="Day Streak"   delay={260} loading={loading} />
           </View>
         </View>
 
@@ -295,10 +310,10 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.metricsGrid}>
-          <MetricCard icon="fire" value={streakLabel} label="Current Streak" gradientColors={['#ef4444', '#dc2626']} iconColor="#fff" delay={200} loading={loading} />
-          <MetricCard icon="trophy" value={String(dashboard.total_points)} label="Total Points" gradientColors={['#f59e0b', '#d97706']} iconColor="#fff" delay={260} loading={loading} />
-          <MetricCard icon="trending-up" value={healthScore} label="Healthy Choices" gradientColors={['#10b981', '#059669']} iconColor="#fff" delay={320} loading={loading} />
-          <MetricCard icon="medal" value={String(dashboard.healthy_scans)} label="Healthy Scans" gradientColors={['#8b5cf6', '#7c3aed']} iconColor="#fff" delay={380} loading={loading} />
+          <MetricCard icon="fire"      value={streakLabel}                      label="Current Streak"  gradientColors={['#ef4444', '#dc2626']} iconColor="#fff" delay={200} loading={loading} />
+          <MetricCard icon="trophy"    value={String(dashboard.total_points)}   label="Total Points"    gradientColors={['#f59e0b', '#d97706']} iconColor="#fff" delay={260} loading={loading} />
+          <MetricCard icon="trending-up" value={healthScore}                    label="Healthy Choices" gradientColors={['#10b981', '#059669']} iconColor="#fff" delay={320} loading={loading} />
+          <MetricCard icon="medal"     value={String(dashboard.healthy_scans)}  label="Healthy Scans"   gradientColors={['#8b5cf6', '#7c3aed']} iconColor="#fff" delay={380} loading={loading} />
         </View>
 
         {/* Insights */}
@@ -322,6 +337,14 @@ export default function HomeScreen() {
             </LinearGradient>
             <Text style={styles.utilLabel}>Analytics</Text>
             <Text style={styles.utilDesc}>See your trends</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.utilCard} activeOpacity={0.75} onPress={() => router.push('/leaderboard')}>
+            <LinearGradient colors={['#10b981', '#059669']} style={styles.utilIconBg}>
+              <Icon name="trophy" size={28} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.utilLabel}>Leaderboard</Text>
+            <Text style={styles.utilDesc}>See top scanners</Text>
           </TouchableOpacity>
         </View>
 
