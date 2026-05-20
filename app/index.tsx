@@ -299,7 +299,7 @@ export default function OnboardingScreen() {
                 style={styles.secondaryButton}
               >
                 <Text style={styles.secondaryButtonText}>
-                  Skip - Use Offline Mode
+                  Skip - Guest Mode
                 </Text>
               </TouchableOpacity>
 

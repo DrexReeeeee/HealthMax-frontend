@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,27 +23,26 @@ import { saveAuthData, saveUserProfile } from './utils/storage';
 const { width, height } = Dimensions.get('window');
 
 const HEALTH_GOALS = [
-  { id: 'low-sugar', label: '🍬 Low Sugar', emoji: '🍬' },
-  { id: 'diabetic-friendly', label: '💉 Diabetic Friendly', emoji: '💉' },
-  { id: 'low-salt', label: '🧂 Low Salt', emoji: '🧂' },
-  { id: 'hypertension', label: '❤️ Hypertension', emoji: '❤️' },
-  { id: 'heart-health', label: '💚 Heart Health', emoji: '💚' },
-  { id: 'low-fat', label: '🥗 Low Fat', emoji: '🥗' },
-  { id: 'general-wellness', label: '⭐ General Wellness', emoji: '⭐' },
+  { id: 'low-sugar', label: 'Low Sugar', icon: 'droplet' },
+  { id: 'diabetic-friendly', label: 'Diabetic Friendly', icon: 'activity' },
+  { id: 'low-salt', label: 'Low Salt', icon: 'wind' },
+  { id: 'hypertension', label: 'Hypertension', icon: 'heart' },
+  { id: 'heart-health', label: 'Heart Health', icon: 'heart' },
+  { id: 'low-fat', label: 'Low Fat', icon: 'trending-down' },
+  { id: 'general-wellness', label: 'General Wellness', icon: 'smile' },
 ];
 
 const DIETARY_PREFS = [
-  { id: 'balanced', label: '⚖️ Balanced', emoji: '⚖️' },
-  { id: 'vegetarian', label: '🥦 Vegetarian', emoji: '🥦' },
-  { id: 'vegan', label: '🌱 Vegan', emoji: '🌱' },
-  { id: 'pescatarian', label: '🐟 Pescatarian', emoji: '🐟' },
-  { id: 'keto', label: '🥑 Keto', emoji: '🥑' },
-  { id: 'halal', label: '☪️ Halal', emoji: '☪️' },
-  { id: 'gluten-free', label: '🌾 Gluten-Free', emoji: '🌾' },
-  { id: 'dairy-free', label: '🥛 Dairy-Free', emoji: '🥛' },
+  { id: 'balanced', label: 'Balanced', icon: 'compass' },
+  { id: 'vegetarian', label: 'Vegetarian', icon: 'leaf' },
+  { id: 'vegan', label: 'Vegan', icon: 'sun' },
+  { id: 'pescatarian', label: 'Pescatarian', icon: 'anchor' },
+  { id: 'keto', label: 'Keto', icon: 'zap' },
+  { id: 'halal', label: 'Halal', icon: 'star' },
+  { id: 'gluten-free', label: 'Gluten-Free', icon: 'x-circle' },
+  { id: 'dairy-free', label: 'Dairy-Free', icon: 'slash' },
 ];
 
-// ─── Validation Constants ──────────────────────────────────────
 const MIN_AGE = 1;
 const MAX_AGE = 120;
 const MIN_WEIGHT = 1;
@@ -52,9 +51,18 @@ const MAX_WEIGHT = 500;
 export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [passwordStrength, setPasswordStrength] = useState({ score: 0, label: '', color: '' });
+
+  // Background animation values
+  const bgAnim = useRef(new Animated.Value(0)).current;
+  const circle1Anim = useRef(new Animated.Value(0)).current;
+  const circle2Anim = useRef(new Animated.Value(0)).current;
 
   const [form, setForm] = useState({
     username: '',
@@ -69,16 +77,105 @@ export default function Register() {
   const update = (key: string, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }));
 
-  // ─── Age validation ──────────────────────────────────────────
+  // Background animation
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bgAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(bgAnim, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(circle1Anim, {
+          toValue: 1,
+          duration: 4000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(circle1Anim, {
+          toValue: 0,
+          duration: 4000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(circle2Anim, {
+          toValue: 1,
+          duration: 5000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(circle2Anim, {
+          toValue: 0,
+          duration: 5000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  // Password strength checker
+  const checkPasswordStrength = (password: string) => {
+    let score = 0;
+    if (password.length >= 6) score++;
+    if (password.length >= 10) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    
+    let label = '';
+    let color = '';
+    if (score <= 2) {
+      label = 'Weak';
+      color = '#ef4444';
+    } else if (score <= 4) {
+      label = 'Medium';
+      color = '#f59e0b';
+    } else {
+      label = 'Strong';
+      color = '#10b981';
+    }
+    
+    setPasswordStrength({ score, label, color });
+    return score >= 2;
+  };
+
+  const handlePasswordChange = (text: string) => {
+    update('password', text);
+    checkPasswordStrength(text);
+  };
+
   const handleAgeChange = (text: string) => {
-    // Only allow whole numbers (no decimals, no negative)
     const cleaned = text.replace(/[^0-9]/g, '');
     update('age', cleaned);
   };
 
+  const handleWeightChange = (text: string) => {
+    let cleaned = text.replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      cleaned = parts[0] + '.' + parts.slice(1).join('');
+    }
+    if (parts.length === 2 && parts[1].length > 1) {
+      cleaned = parts[0] + '.' + parts[1].substring(0, 1);
+    }
+    update('weight', cleaned);
+  };
+
   const validateAge = (): string | null => {
     if (!form.age || form.age.trim() === '') {
-      return null; // Age is optional
+      return null;
     }
     const ageNum = parseInt(form.age, 10);
     if (isNaN(ageNum)) {
@@ -96,29 +193,9 @@ export default function Register() {
     return null;
   };
 
-  // ─── Weight validation ───────────────────────────────────────
-  const handleWeightChange = (text: string) => {
-    // Allow numbers and one decimal point
-    // Reject: multiple dots, negative signs, letters
-    let cleaned = text.replace(/[^0-9.]/g, '');
-    
-    // Only allow one decimal point
-    const parts = cleaned.split('.');
-    if (parts.length > 2) {
-      cleaned = parts[0] + '.' + parts.slice(1).join('');
-    }
-    
-    // Limit to 1 decimal place
-    if (parts.length === 2 && parts[1].length > 1) {
-      cleaned = parts[0] + '.' + parts[1].substring(0, 1);
-    }
-    
-    update('weight', cleaned);
-  };
-
   const validateWeight = (): string | null => {
     if (!form.weight || form.weight.trim() === '') {
-      return null; // Weight is optional
+      return null;
     }
     const weightNum = parseFloat(form.weight);
     if (isNaN(weightNum)) {
@@ -133,7 +210,6 @@ export default function Register() {
     return null;
   };
 
-  // ─── Email validation ────────────────────────────────────────
   const validateEmail = (): string | null => {
     if (!form.email || form.email.trim() === '') {
       return 'Email is required.';
@@ -145,7 +221,6 @@ export default function Register() {
     return null;
   };
 
-  // ─── Username validation ─────────────────────────────────────
   const validateUsername = (): string | null => {
     if (!form.username || form.username.trim() === '') {
       return 'Username is required.';
@@ -159,7 +234,6 @@ export default function Register() {
     return null;
   };
 
-  // ─── Password validation ─────────────────────────────────────
   const validatePassword = (): string | null => {
     if (!form.password || form.password.length < 6) {
       return 'Password must be at least 6 characters.';
@@ -170,11 +244,21 @@ export default function Register() {
     return null;
   };
 
+  const validateConfirmPassword = (): string | null => {
+    if (!confirmPassword) {
+      return 'Please confirm your password.';
+    }
+    if (form.password !== confirmPassword) {
+      return 'Passwords do not match.';
+    }
+    return null;
+  };
+
   const steps = [
     {
-      title: 'Welcome to FitMax! 👋',
+      title: 'Welcome to HealthMax',
       subtitle: 'First, let\'s create your account',
-      fields: ['username', 'email', 'password'],
+      fields: ['username', 'email', 'password', 'confirmPassword'],
     },
     {
       title: 'Tell us about yourself',
@@ -194,7 +278,6 @@ export default function Register() {
   ];
 
   const handleNext = () => {
-    // Validate current step
     if (currentStep === 0) {
       const usernameError = validateUsername();
       if (usernameError) {
@@ -209,6 +292,11 @@ export default function Register() {
       const passwordError = validatePassword();
       if (passwordError) {
         Alert.alert('Weak Password', passwordError);
+        return;
+      }
+      const confirmError = validateConfirmPassword();
+      if (confirmError) {
+        Alert.alert('Password Mismatch', confirmError);
         return;
       }
     }
@@ -227,21 +315,46 @@ export default function Register() {
     }
 
     if (currentStep < steps.length - 1) {
-      Animated.sequence([
+      Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: 200,
           useNativeDriver: true,
         }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 150,
+        Animated.timing(slideAnim, {
+          toValue: -50,
+          duration: 200,
           useNativeDriver: true,
         }),
-      ]).start();
-      
-      setCurrentStep(currentStep + 1);
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        Animated.sequence([
+          Animated.timing(scaleAnim, {
+            toValue: 0.95,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 1,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start(() => {
+        setCurrentStep(currentStep + 1);
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 7,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
     } else {
       handleRegister();
     }
@@ -249,28 +362,40 @@ export default function Register() {
 
   const handleBack = () => {
     if (currentStep > 0) {
-      Animated.sequence([
+      Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: 200,
           useNativeDriver: true,
         }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 150,
+        Animated.timing(slideAnim, {
+          toValue: 50,
+          duration: 200,
           useNativeDriver: true,
         }),
-      ]).start();
-      
-      setCurrentStep(currentStep - 1);
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      ]).start(() => {
+        setCurrentStep(currentStep - 1);
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 7,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
     } else {
       router.replace('/');
     }
   };
 
   const handleRegister = async () => {
-    // Final validation before submit
     const usernameError = validateUsername();
     if (usernameError) {
       Alert.alert('Invalid Username', usernameError);
@@ -286,8 +411,12 @@ export default function Register() {
       Alert.alert('Weak Password', passwordError);
       return;
     }
+    const confirmError = validateConfirmPassword();
+    if (confirmError) {
+      Alert.alert('Password Mismatch', confirmError);
+      return;
+    }
 
-    // Parse age and weight safely
     const parsedAge = form.age && form.age.trim() !== '' 
       ? parseInt(form.age, 10) 
       : undefined;
@@ -295,7 +424,6 @@ export default function Register() {
       ? parseFloat(form.weight) 
       : undefined;
 
-    // Validate parsed values
     if (parsedAge !== undefined && (isNaN(parsedAge) || parsedAge < MIN_AGE || parsedAge > MAX_AGE)) {
       Alert.alert('Invalid Age', `Age must be between ${MIN_AGE} and ${MAX_AGE}.`);
       return;
@@ -372,7 +500,7 @@ export default function Register() {
     switch (currentStep) {
       case 0:
         return (
-          <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+          <Animated.View style={[styles.stepContainer, { opacity: fadeAnim, transform: [{ translateX: slideAnim }] }]}>
             <View style={styles.inputGroup}>
               <View style={styles.iconInput}>
                 <Feather name="user" size={20} color="#94a3b8" />
@@ -411,8 +539,8 @@ export default function Register() {
                 <TextInput
                   style={styles.iconTextField}
                   value={form.password}
-                  onChangeText={t => update('password', t)}
-                  placeholder="Password (min. 6 characters)"
+                  onChangeText={handlePasswordChange}
+                  placeholder="Password"
                   placeholderTextColor="#94a3b8"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
@@ -421,14 +549,42 @@ export default function Register() {
                   <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color="#94a3b8" />
                 </TouchableOpacity>
               </View>
+              {form.password.length > 0 && (
+                <View style={styles.strengthContainer}>
+                  <View style={styles.strengthBar}>
+                    <View style={[styles.strengthFill, { width: `${(passwordStrength.score / 6) * 100}%`, backgroundColor: passwordStrength.color }]} />
+                  </View>
+                  <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
+                    {passwordStrength.label} password
+                  </Text>
+                </View>
+              )}
               <Text style={styles.fieldHint}>Must be at least 6 characters.</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <View style={styles.iconInput}>
+                <Feather name="lock" size={20} color="#94a3b8" />
+                <TextInput
+                  style={styles.iconTextField}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Confirm password"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+              </View>
+              {confirmPassword.length > 0 && form.password !== confirmPassword && (
+                <Text style={styles.errorHint}>Passwords do not match</Text>
+              )}
             </View>
           </Animated.View>
         );
 
       case 1:
         return (
-          <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+          <Animated.View style={[styles.stepContainer, { opacity: fadeAnim, transform: [{ translateX: slideAnim }] }]}>
             <View style={styles.inputGroup}>
               <View style={styles.iconInput}>
                 <Feather name="calendar" size={20} color="#94a3b8" />
@@ -472,7 +628,7 @@ export default function Register() {
 
       case 2:
         return (
-          <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+          <Animated.View style={[styles.stepContainer, { opacity: fadeAnim, transform: [{ translateX: slideAnim }] }]}>
             <View style={styles.optionsGrid}>
               {HEALTH_GOALS.map(goal => {
                 const selected = form.healthGoal === goal.id;
@@ -482,13 +638,13 @@ export default function Register() {
                     onPress={() => update('healthGoal', selected ? '' : goal.id)}
                     style={[styles.optionCard, selected && styles.optionCardSelected]}
                   >
-                    <Text style={styles.optionEmoji}>{goal.emoji}</Text>
+                    <Feather name={goal.icon as any} size={24} color={selected ? '#10b981' : '#64748b'} />
                     <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
                       {goal.label}
                     </Text>
                     {selected && (
                       <View style={styles.checkmark}>
-                        <Feather name="check" size={16} color="#fff" />
+                        <Feather name="check" size={14} color="#fff" />
                       </View>
                     )}
                   </TouchableOpacity>
@@ -500,7 +656,7 @@ export default function Register() {
 
       case 3:
         return (
-          <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+          <Animated.View style={[styles.stepContainer, { opacity: fadeAnim, transform: [{ translateX: slideAnim }] }]}>
             <View style={styles.optionsGrid}>
               {DIETARY_PREFS.map(pref => {
                 const selected = form.dietaryPreference === pref.id;
@@ -510,13 +666,13 @@ export default function Register() {
                     onPress={() => update('dietaryPreference', selected ? '' : pref.id)}
                     style={[styles.optionCard, selected && styles.optionCardSelected]}
                   >
-                    <Text style={styles.optionEmoji}>{pref.emoji}</Text>
+                    <Feather name={pref.icon as any} size={24} color={selected ? '#10b981' : '#64748b'} />
                     <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
                       {pref.label}
                     </Text>
                     {selected && (
                       <View style={styles.checkmark}>
-                        <Feather name="check" size={16} color="#fff" />
+                        <Feather name="check" size={14} color="#fff" />
                       </View>
                     )}
                   </TouchableOpacity>
@@ -535,11 +691,60 @@ export default function Register() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       
+      {/* Animated Background */}
+      <Animated.View style={[styles.background, {
+        backgroundColor: bgAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['#ffffff', '#f0fdf4']
+        })
+      }]}>
+        <Animated.View style={[styles.circle, styles.circle1, {
+          transform: [
+            {
+              scale: circle1Anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 1.5]
+              })
+            },
+            {
+              translateX: circle1Anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 50]
+              })
+            }
+          ],
+          opacity: circle1Anim.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0.1, 0.2, 0.1]
+          })
+        }]} />
+        <Animated.View style={[styles.circle, styles.circle2, {
+          transform: [
+            {
+              scale: circle2Anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 1.3]
+              })
+            },
+            {
+              translateY: circle2Anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, -30]
+              })
+            }
+          ],
+          opacity: circle2Anim.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0.05, 0.15, 0.05]
+          })
+        }]} />
+      </Animated.View>
+
       <View style={styles.progressContainer}>
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          <Animated.View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="#1e293b" />
@@ -563,24 +768,24 @@ export default function Register() {
 
           {renderStepContent()}
 
-          <View style={styles.navigationButtons}>
+          <Animated.View style={[styles.navigationButtons, { transform: [{ scale: scaleAnim }] }]}>
             <TouchableOpacity
               style={[styles.nextButton, loading && styles.nextButtonDisabled]}
               onPress={handleNext}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color="#ffffff" size="small" />
               ) : (
                 <>
                   <Text style={styles.nextButtonText}>
                     {currentStep === steps.length - 1 ? 'Create Account' : 'Continue'}
                   </Text>
-                  <Feather name="arrow-right" size={20} color="#fff" />
+                  <Feather name="arrow-right" size={20} color="#ffffff" />
                 </>
               )}
             </TouchableOpacity>
-          </View>
+          </Animated.View>
 
           {currentStep === 0 && (
             <View style={styles.loginRow}>
@@ -599,15 +804,40 @@ export default function Register() {
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: '#fff' 
+    backgroundColor: '#ffffff' 
   },
   flex: { 
     flex: 1 
   },
+  background: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  circle: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: '#10b981',
+  },
+  circle1: {
+    width: width * 0.6,
+    height: width * 0.6,
+    top: -width * 0.2,
+    right: -width * 0.1,
+  },
+  circle2: {
+    width: width * 0.8,
+    height: width * 0.8,
+    bottom: -width * 0.3,
+    left: -width * 0.2,
+  },
   progressContainer: {
     position: 'relative',
     paddingTop: Platform.OS === 'ios' ? 8 : 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
+    zIndex: 1,
   },
   progressBar: {
     height: 4,
@@ -623,30 +853,31 @@ const styles = StyleSheet.create({
   backButton: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 12 : 16,
-    left: 20,
+    left: 16,
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 48,
     paddingBottom: 40,
   },
   header: {
     marginBottom: 48,
   },
   stepTitle: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 12,
-    lineHeight: 42,
+    lineHeight: 40,
   },
   stepSubtitle: {
-    fontSize: 17,
+    fontSize: 16,
     color: '#64748b',
     lineHeight: 24,
   },
@@ -654,7 +885,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   iconInput: {
     flexDirection: 'row',
@@ -663,28 +894,53 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderRadius: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     gap: 12,
   },
   iconTextField: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 16,
     paddingVertical: 18,
     color: '#0f172a',
   },
   fieldHint: {
     fontSize: 12,
     color: '#94a3b8',
-    marginTop: 6,
+    marginTop: 8,
+    marginLeft: 4,
+  },
+  errorHint: {
+    fontSize: 12,
+    color: '#ef4444',
+    marginTop: 8,
+    marginLeft: 4,
+  },
+  strengthContainer: {
+    marginTop: 8,
+    gap: 4,
+  },
+  strengthBar: {
+    height: 3,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 1.5,
+    overflow: 'hidden',
+  },
+  strengthFill: {
+    height: '100%',
+    borderRadius: 1.5,
+  },
+  strengthText: {
+    fontSize: 11,
+    fontWeight: '500',
     marginLeft: 4,
   },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 12,
     backgroundColor: '#f8fafc',
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
@@ -700,38 +956,30 @@ const styles = StyleSheet.create({
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    borderWidth: 2,
+    padding: 18,
+    borderWidth: 1.5,
     borderColor: '#e2e8f0',
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    position: 'relative',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    gap: 14,
   },
   optionCardSelected: {
     borderColor: '#10b981',
     backgroundColor: '#f0fdf4',
   },
-  optionEmoji: {
-    fontSize: 28,
-    marginRight: 16,
-  },
   optionText: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '500',
     color: '#334155',
   },
   optionTextSelected: {
     color: '#10b981',
-    fontWeight: '600',
   },
   checkmark: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#10b981',
     alignItems: 'center',
     justifyContent: 'center',
@@ -750,17 +998,17 @@ const styles = StyleSheet.create({
     gap: 12,
     shadowColor: '#10b981',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 12,
-    elevation: 6,
+    elevation: 5,
   },
   nextButtonDisabled: {
     opacity: 0.6,
   },
   nextButtonText: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#fff',
+    fontWeight: '600',
+    color: '#ffffff',
   },
   loginRow: {
     flexDirection: 'row',
@@ -774,7 +1022,7 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#10b981',
   },
 });

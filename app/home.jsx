@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { getUserProfile, saveDashboardCache, getDashboardCache, getUser } from './utils/storage';
+import { getUser, saveDashboardCache, getDashboardCache, saveUserProfile } from './utils/storage';
 import { fetchDashboard, apiFetch } from './utils/api';
 
 const { width } = Dimensions.get('window');
@@ -144,15 +144,22 @@ export default function HomeScreen() {
 
   const loadUserProfile = useCallback(async () => {
     try {
+      // First try to get from storage (user object from login)
       const user = await getUser();
-      if (user?.username) {
+      if (user?.username && user.username !== 'Guest User') {
         setUsername(user.username);
         return;
       }
 
+      // If not in storage or is Guest User, fetch from API
       const { ok, data } = await apiFetch('/api/profile', { method: 'GET' }, true);
       if (ok && data?.profile?.username) {
-        setUsername(data.profile.username);
+        const newUsername = data.profile.username;
+        setUsername(newUsername);
+        // Update the stored user with the new username
+        if (user) {
+          await AsyncStorage.setItem('user', JSON.stringify({ ...user, username: newUsername }));
+        }
       }
     } catch (err) {
       console.log('Profile error:', err);
