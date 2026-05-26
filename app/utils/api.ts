@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_BASE_URL = 'http://192.168.2.142:3000';
+export const API_BASE_URL = 'http://10.16.182.12:3000';
 
 export async function apiFetch(
   endpoint: string,

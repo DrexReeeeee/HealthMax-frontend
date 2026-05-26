@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   Easing,
@@ -160,6 +161,9 @@ export default function History() {
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
+  // ── Archive state ──────────────────────────────────────
+  const [archivingId, setArchivingId] = useState<string | null>(null);
+
   const floatAnim1 = useRef(new Animated.Value(0)).current;
   const floatAnim2 = useRef(new Animated.Value(0)).current;
   const floatAnim3 = useRef(new Animated.Value(0)).current;
@@ -225,6 +229,46 @@ export default function History() {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  // ── Archive / Restore ──────────────────────────────────
+
+  const handleArchive = (item: HistoryItem) => {
+    if (item.id.startsWith('local_')) return; // local scans can't be archived
+
+    Alert.alert(
+      'Archive Scan',
+      `Remove "${item.products.name}" from your history? You can restore it anytime.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive',
+          style: 'destructive',
+          onPress: async () => {
+            setArchivingId(item.id);
+            try {
+              const { ok, data } = await apiFetch(
+                `/api/history/${item.id}/archive`,
+                { method: 'PATCH' },
+                true
+              );
+              if (ok && data.success) {
+                // Optimistically remove from list
+                setHistory(prev => prev.filter(h => h.id !== item.id));
+                // Close detail sheet if the archived scan is currently open
+                if (detail?.id === item.id) hideSheet();
+              } else {
+                Alert.alert('Error', data.message || 'Failed to archive scan.');
+              }
+            } catch (err) {
+              Alert.alert('Error', 'Something went wrong. Please try again.');
+            } finally {
+              setArchivingId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // ── Client-side filtering ──────────────────────────────
@@ -308,8 +352,10 @@ export default function History() {
   // ── List item ──────────────────────────────────────────
 
   const renderItem = ({ item }: { item: HistoryItem }) => {
-    const safeScore = item.score ?? 0;
-    const color     = scoreColor(safeScore);
+    const safeScore  = item.score ?? 0;
+    const color      = scoreColor(safeScore);
+    const isArchiving = archivingId === item.id;
+    const isLocal     = item.id.startsWith('local_');
 
     return (
       <TouchableOpacity style={styles.card} activeOpacity={0.75} onPress={() => openDetail(item)}>
@@ -335,11 +381,29 @@ export default function History() {
           <Text style={[styles.stars, { color }]}>{stars(safeScore)}</Text>
         </View>
 
-        <View style={[styles.scoreBadge, { backgroundColor: color + '15', borderColor: color + '30', borderWidth: 1 }]}>
-          <Text style={[styles.scoreGrade,  { color }]}>{scoreGrade(safeScore)}</Text>
-          <Text style={[styles.scoreNumber, { color }]}>{safeScore}</Text>
-          <Text style={[styles.scoreMax,    { color: color + '99' }]}>/100</Text>
-          <Text style={[styles.scoreLabel,  { color }]}>{scoreLabel(safeScore)}</Text>
+        <View style={styles.cardRight}>
+          <View style={[styles.scoreBadge, { backgroundColor: color + '15', borderColor: color + '30', borderWidth: 1 }]}>
+            <Text style={[styles.scoreGrade,  { color }]}>{scoreGrade(safeScore)}</Text>
+            <Text style={[styles.scoreNumber, { color }]}>{safeScore}</Text>
+            <Text style={[styles.scoreMax,    { color: color + '99' }]}>/100</Text>
+            <Text style={[styles.scoreLabel,  { color }]}>{scoreLabel(safeScore)}</Text>
+          </View>
+
+          {/* ── Archive button (online scans only) ── */}
+          {!isLocal && (
+            <TouchableOpacity
+              style={styles.archiveBtn}
+              onPress={() => handleArchive(item)}
+              disabled={isArchiving}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              {isArchiving
+                ? <ActivityIndicator size="small" color="#dc2626" />
+                : <Icon name="archive-arrow-down-outline" size={16} color="#dc2626" />
+              }
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -369,10 +433,9 @@ export default function History() {
     const safeScore = detail.score ?? 0;
     const color     = scoreColor(safeScore);
     const n         = detail.products.nutrients;
+    const isLocal   = detail.id.startsWith('local_');
 
     // Show alternatives whenever backend provides them.
-    // Scanner can show alternatives, but history was previously hiding them
-    // if the saved `detail.score` wasn't < 60.
     const showAlts  = detail.alternatives.length > 0;
     const date      = formatDate(detail.scanned_at, 'long');
 
@@ -402,9 +465,29 @@ export default function History() {
                   <Text style={styles.detailDate}>{date}</Text>
                 </View>
               </View>
-              <View style={[styles.scoreCircle, { borderColor: color }]}>
-                <Text style={[styles.scoreCircleNumber, { color }]}>{safeScore}</Text>
-                <Text style={[styles.scoreCircleMax, { color: color + '90' }]}>/100</Text>
+              <View style={styles.scoreBannerRight}>
+                <View style={[styles.scoreCircle, { borderColor: color }]}>
+                  <Text style={[styles.scoreCircleNumber, { color }]}>{safeScore}</Text>
+                  <Text style={[styles.scoreCircleMax, { color: color + '90' }]}>/100</Text>
+                </View>
+
+                {/* ── Archive button in detail sheet (online only) ── */}
+                {!isLocal && (
+                  <TouchableOpacity
+                    style={styles.sheetArchiveBtn}
+                    onPress={() => handleArchive(detail)}
+                    disabled={archivingId === detail.id}
+                    activeOpacity={0.7}
+                  >
+                    {archivingId === detail.id
+                      ? <ActivityIndicator size="small" color="#dc2626" />
+                      : <>
+                          <Icon name="archive-arrow-down-outline" size={14} color="#dc2626" />
+                          <Text style={styles.sheetArchiveBtnText}>Archive</Text>
+                        </>
+                    }
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
@@ -767,11 +850,29 @@ const styles = StyleSheet.create({
   dateText:     { fontSize: 11, color: '#94a3b8' },
   stars:        { fontSize: 13, marginTop: 4, letterSpacing: 1 },
 
+  // ── Card right column: score badge + archive button ──
+  cardRight:   { alignItems: 'center', gap: 8 },
   scoreBadge:  { alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, minWidth: 68 },
   scoreGrade:  { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   scoreNumber: { fontSize: 22, fontWeight: '800', lineHeight: 26 },
   scoreMax:    { fontSize: 10, fontWeight: '600', lineHeight: 12 },
   scoreLabel:  { fontSize: 10, fontWeight: '600', marginTop: 3 },
+  archiveBtn:  { 
+    padding: 6, 
+    borderRadius: 20, 
+    backgroundColor: '#fef2f2',
+    width: 32, 
+    height: 32, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
 
   centered:        { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyTitle:      { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 6, marginTop: 12 },
@@ -794,15 +895,34 @@ const styles = StyleSheet.create({
   // Score banner
   scoreBanner:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 8, borderWidth: 1 },
   scoreBannerLeft:  { flex: 1, gap: 6 },
+  scoreBannerRight: { alignItems: 'center', gap: 8 },
   scoreLabelRow:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
   scoreBannerLabel: { fontSize: 17, fontWeight: '800' },
   gradePill:        { borderRadius: 20, paddingVertical: 3, paddingHorizontal: 10 },
   gradePillText:    { fontSize: 12, fontWeight: '800', color: '#fff' },
   detailDateRow:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
   detailDate:       { fontSize: 12, color: '#94a3b8', fontWeight: '500' },
-  scoreCircle:      { width: 64, height: 64, borderRadius: 32, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
+  scoreCircle:      { width: 64, height: 64, borderRadius: 32, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center' },
   scoreCircleNumber:{ fontSize: 24, fontWeight: '900', lineHeight: 26 },
   scoreCircleMax:   { fontSize: 10, fontWeight: '600' },
+
+  // Archive button inside detail sheet
+  sheetArchiveBtn: {
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6,
+    backgroundColor: '#fef2f2',
+    borderRadius: 20,
+    paddingVertical: 6, 
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  sheetArchiveBtnText: { 
+    fontSize: 12, 
+    fontWeight: '600', 
+    color: '#dc2626',
+  },
 
   // Description
   descriptionBox: {
