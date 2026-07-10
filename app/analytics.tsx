@@ -1165,6 +1165,79 @@ const healthyPct  = totalScans > 0 ? Math.round((healthyScans / totalScans) * 10
               </View>
             </FadeIn>
 
+            {/* Nutrient Summary Card */}
+            <FadeIn delay={450}>
+              <View style={[styles.card, styles.summaryCard]}>
+                <View style={styles.summaryHeader}>
+                  <View style={styles.summaryIconContainer}>
+                    <Feather name="clipboard" size={20} color="#10b981" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.summaryTitle}>Nutrient Summary</Text>
+                    <Text style={styles.summarySubtitle}>Quick overview of your average intake</Text>
+                  </View>
+                </View>
+
+                <View style={styles.summaryGrid}>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryItemLabel}>Sugar</Text>
+                    <Text style={[styles.summaryItemValue, { color: nutrients.sugar_g <= 10 ? '#10b981' : '#dc2626' }]}>
+                      {nutrients.sugar_g}g
+                    </Text>
+                    <Text style={styles.summaryItemStatus}>
+                      {nutrients.sugar_g <= 10 ? '✓ Good' : '⚠ High'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryItemLabel}>Sodium</Text>
+                    <Text style={[styles.summaryItemValue, { color: nutrients.sodium_mg <= 500 ? '#10b981' : '#dc2626' }]}>
+                      {nutrients.sodium_mg}mg
+                    </Text>
+                    <Text style={styles.summaryItemStatus}>
+                      {nutrients.sodium_mg <= 500 ? '✓ Good' : '⚠ High'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryItemLabel}>Fiber</Text>
+                    <Text style={[styles.summaryItemValue, { color: nutrients.fiber_g >= 3 ? '#10b981' : '#dc2626' }]}>
+                      {nutrients.fiber_g}g
+                    </Text>
+                    <Text style={styles.summaryItemStatus}>
+                      {nutrients.fiber_g >= 3 ? '✓ Good' : '⚠ Low'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.summaryFooter}>
+                  <View style={styles.summaryScore}>
+                    <Text style={styles.summaryScoreLabel}>Overall Nutrient Score</Text>
+                    <View style={styles.summaryScoreBar}>
+                      <View style={[styles.summaryScoreFill, { 
+                        width: `${Math.min(100, ((100 - nutrients.sugar_g * 2) + (100 - nutrients.sodium_mg / 5) + nutrients.fiber_g * 10) / 3)}%`,
+                        backgroundColor: ((100 - nutrients.sugar_g * 2) + (100 - nutrients.sodium_mg / 5) + nutrients.fiber_g * 10) / 3 >= 60 ? '#10b981' : '#f59e0b'
+                      }]} />
+                    </View>
+                    <Text style={styles.summaryScoreText}>
+                      {Math.round(((100 - nutrients.sugar_g * 2) + (100 - nutrients.sodium_mg / 5) + nutrients.fiber_g * 10) / 3)}/100
+                    </Text>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={styles.viewMoreBtn}
+                    onPress={() => setTab('insights')}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient colors={['#10b981', '#059669']} style={styles.viewMoreGradient}>
+                      <Text style={styles.viewMoreText}>View More Insights</Text>
+                      <Feather name="arrow-right" size={16} color="#fff" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </FadeIn>
+
             <FadeIn delay={550}>
               <View style={styles.card}>
                 <SectionHeader icon="cpu" title="Processing Level (NOVA)" />
@@ -1285,43 +1358,43 @@ const healthyPct  = totalScans > 0 ? Math.round((healthyScans / totalScans) * 10
             </FadeIn>
 
             {/* Recommendations */}
-              <FadeIn delay={550}>
-                <View style={[styles.card, styles.recommendationCard]}>
-                  <SectionHeader icon="lightbulb" title="Recommendations" />
-                  {[
-                    nutrients.sugar_g > 10 && "Replace sugary snacks with fresh fruit or yogurt",
-                    nutrients.sodium_mg > 500 && "Choose fresh ingredients over processed foods",
-                    nutrients.fiber_g < 3 && "Add beans, oats, or whole grains to your diet",
-                    nutrients.protein_g < 5 && "Include eggs, legumes, or lean meats in meals",
-                    (() => {
-                      const ultraProcessed = nova.find(n => n.label === 'Ultra-processed');
-                      return ultraProcessed && ultraProcessed.pct > 30 ? "Reduce ultra-processed foods by cooking more meals at home" : null;
-                    })(),
-                    timeOfDay.morning.avg < 50 && "Your morning choices need improvement - start the day healthy!",
-                    (() => {
-                      const sundayData = dayOfWeek.find(d => d.day === 'Sunday');
-                      return sundayData && sundayData.avgScore < 50 ? "Weekends show lower scores - plan ahead for better choices" : null;
-                    })(),
-                  ].filter(Boolean).map((tip, i) => (
-                    <View key={i} style={styles.tipRow}>
-                      <Feather name="check-circle" size={14} color="#10b981" />
-                      <Text style={styles.tipText}>{tip as string}</Text>
-                    </View>
-                  ))}
-                  
-                  {[
-                    nutrients.sugar_g > 10,
-                    nutrients.sodium_mg > 500,
-                    nutrients.fiber_g < 3,
-                    nutrients.protein_g < 5,
-                  ].every(v => !v) && (
-                    <View style={styles.allGoodContainer}>
-                      <Feather name="check-circle" size={20} color="#10b981" />
-                      <Text style={styles.allGoodText}>Excellent work! You're making great food choices!</Text>
-                    </View>
-                  )}
-                </View>
-              </FadeIn>
+            <FadeIn delay={550}>
+              <View style={[styles.card, styles.recommendationCard]}>
+                <SectionHeader icon="lightbulb" title="Recommendations" />
+                {[
+                  nutrients.sugar_g > 10 && "Replace sugary snacks with fresh fruit or yogurt",
+                  nutrients.sodium_mg > 500 && "Choose fresh ingredients over processed foods",
+                  nutrients.fiber_g < 3 && "Add beans, oats, or whole grains to your diet",
+                  nutrients.protein_g < 5 && "Include eggs, legumes, or lean meats in meals",
+                  (() => {
+                    const ultraProcessed = nova.find(n => n.label === 'Ultra-processed');
+                    return ultraProcessed && ultraProcessed.pct > 30 ? "Reduce ultra-processed foods by cooking more meals at home" : null;
+                  })(),
+                  timeOfDay.morning.avg < 50 && "Your morning choices need improvement - start the day healthy!",
+                  (() => {
+                    const sundayData = dayOfWeek.find(d => d.day === 'Sunday');
+                    return sundayData && sundayData.avgScore < 50 ? "Weekends show lower scores - plan ahead for better choices" : null;
+                  })(),
+                ].filter(Boolean).map((tip, i) => (
+                  <View key={i} style={styles.tipRow}>
+                    <Feather name="check-circle" size={14} color="#10b981" />
+                    <Text style={styles.tipText}>{tip as string}</Text>
+                  </View>
+                ))}
+                
+                {[
+                  nutrients.sugar_g > 10,
+                  nutrients.sodium_mg > 500,
+                  nutrients.fiber_g < 3,
+                  nutrients.protein_g < 5,
+                ].every(v => !v) && (
+                  <View style={styles.allGoodContainer}>
+                    <Feather name="check-circle" size={20} color="#10b981" />
+                    <Text style={styles.allGoodText}>Excellent work! You're making great food choices!</Text>
+                  </View>
+                )}
+              </View>
+            </FadeIn>
 
             {/* Optimal Scanning Times */}
             <FadeIn delay={650}>
@@ -1336,7 +1409,6 @@ const healthyPct  = totalScans > 0 ? Math.round((healthyScans / totalScans) * 10
                         { time: 'morning', avg: 0 }
                       );
 
-                      // Replace the time key with a readable label
                       const timeLabels: Record<string, string> = {
                         morning:   'morning (5am–12pm)',
                         afternoon: 'afternoon (12pm–5pm)',
@@ -1345,7 +1417,7 @@ const healthyPct  = totalScans > 0 ? Math.round((healthyScans / totalScans) * 10
                       };
 
                       return `Your best scores come from ${timeLabels[bestTime.time] ?? bestTime.time} scans (avg ${bestTime.avg}). Try to scan more during this time for better results!`;
-                                          })()}
+                    })()}
                   </Text>
                 </View>
               </View>
@@ -1483,6 +1555,120 @@ const styles = StyleSheet.create({
   hbarTrack: { flex: 1, height: 8, backgroundColor: '#f1f5f9', borderRadius: 99, overflow: 'hidden' },
   hbarFill: { height: 8, borderRadius: 99 },
   hbarValue: { width: 48, fontSize: 11, fontWeight: '700', textAlign: 'right' },
+
+  // Summary Card
+  summaryCard: { 
+    backgroundColor: '#f0fdf4', 
+    borderWidth: 1, 
+    borderColor: '#bbf7d0',
+  },
+  summaryHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12, 
+    marginBottom: 16,
+  },
+  summaryIconContainer: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: '#d1fae5', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+  },
+  summaryTitle: { 
+    fontSize: 16, 
+    fontWeight: '700', 
+    color: '#0f172a',
+  },
+  summarySubtitle: { 
+    fontSize: 12, 
+    color: '#64748b', 
+    marginTop: 2,
+  },
+  summaryGrid: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#bbf7d0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#bbf7d0',
+  },
+  summaryItem: { 
+    alignItems: 'center', 
+    flex: 1,
+  },
+  summaryItemLabel: { 
+    fontSize: 10, 
+    color: '#64748b', 
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  summaryItemValue: { 
+    fontSize: 18, 
+    fontWeight: '800', 
+    marginVertical: 4,
+  },
+  summaryItemStatus: { 
+    fontSize: 10, 
+    fontWeight: '600', 
+    color: '#64748b',
+  },
+  summaryDivider: { 
+    width: 1, 
+    height: 40, 
+    backgroundColor: '#bbf7d0',
+  },
+  summaryFooter: { 
+    marginTop: 16,
+    gap: 12,
+  },
+  summaryScore: { 
+    alignItems: 'center',
+  },
+  summaryScoreLabel: { 
+    fontSize: 11, 
+    color: '#64748b', 
+    fontWeight: '500',
+    marginBottom: 6,
+  },
+  summaryScoreBar: { 
+    width: '100%', 
+    height: 6, 
+    backgroundColor: '#e2e8f0', 
+    borderRadius: 99, 
+    overflow: 'hidden',
+  },
+  summaryScoreFill: { 
+    height: 6, 
+    borderRadius: 99,
+  },
+  summaryScoreText: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    color: '#0f172a',
+    marginTop: 4,
+  },
+  viewMoreBtn: { 
+    borderRadius: 12, 
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  viewMoreGradient: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 8, 
+    paddingVertical: 10,
+  },
+  viewMoreText: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    color: '#fff',
+  },
 
   // Extremes
   extremeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

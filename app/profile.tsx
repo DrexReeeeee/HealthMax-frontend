@@ -61,6 +61,7 @@ interface GamificationData {
   level?:              number;
   level_title?:        string;
 }
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const HEALTH_GOALS = [
@@ -84,32 +85,30 @@ const DIETARY_PREFS = [
   { value: 'dairy-free',   label: 'Dairy Free' },
 ];
 
+// ── Unified Badges Configuration with Feather Icons ──────────────────────────
+
 const BADGES = [
-  { id: 'first_scan',       name: 'First Scan',           desc: 'Scanned your first product',              color: '#10b981', icon: '🔍' },
-  { id: 'scan_10',          name: 'Getting Started',       desc: 'Scanned 10 products',                     color: '#f59e0b', icon: '📦' },
-  { id: 'scan_50',          name: 'Dedicated Scanner',     desc: 'Scanned 50 products',                     color: '#8b5cf6', icon: '🏅' },
-  { id: 'scan_100',         name: 'Century Scanner',       desc: 'Scanned 100 products',                    color: '#06b6d4', icon: '💯' },
-  { id: 'scan_500',         name: 'Product Encyclopedia',  desc: 'Scanned 500 products',                    color: '#ec4899', icon: '📚' },
-  { id: 'streak_3',         name: 'On a Roll',             desc: '3-day scanning streak',                   color: '#f97316', icon: '🔥' },
-  { id: 'streak_7',         name: 'Week Warrior',          desc: '7-day scanning streak',                   color: '#ef4444', icon: '⚡' },
-  { id: 'streak_14',        name: 'Two Week Titan',        desc: '14-day scanning streak',                  color: '#3b82f6', icon: '💪' },
-  { id: 'streak_30',        name: 'Monthly Master',        desc: '30-day scanning streak',                  color: '#a855f7', icon: '🌟' },
-  { id: 'streak_90',        name: 'Quarter Champion',      desc: '90-day scanning streak',                  color: '#f59e0b', icon: '👑' },
-  { id: 'first_great',      name: 'Green Light',           desc: 'First product scoring 75+',               color: '#10b981', icon: '🥗' },
-  { id: 'perfect_week',     name: 'Perfect Week',          desc: 'All scans score 60+ in a week',           color: '#06b6d4', icon: '🎯' },
-  { id: 'health_conscious', name: 'Health Conscious',      desc: '70%+ healthy scans overall',              color: '#10b981', icon: '💚' },
-  { id: 'health_master',    name: 'Health Master',         desc: '85%+ healthy scans overall',              color: '#f59e0b', icon: '🏆' },
-  { id: 'improving',        name: 'Improving',             desc: 'Avg score improved 10+ pts over last 10', color: '#3b82f6', icon: '📈' },
-  { id: 'level_5',          name: 'Level 5',               desc: 'Reached Level 5',                         color: '#a855f7', icon: '⭐' },
-  { id: 'level_10',         name: 'Level 10',              desc: 'Reached Level 10',                        color: '#ec4899', icon: '🌠' },
+  { id: 'first_scan',       name: 'First Scan',           desc: 'Scanned your first product',              icon: 'camera' },
+  { id: 'scan_10',          name: 'Getting Started',       desc: 'Scanned 10 products',                     icon: 'package' },
+  { id: 'scan_50',          name: 'Dedicated Scanner',     desc: 'Scanned 50 products',                     icon: 'layers' },
+  { id: 'scan_100',         name: 'Century Scanner',       desc: 'Scanned 100 products',                    icon: 'star' },
+  { id: 'scan_500',         name: 'Product Encyclopedia',  desc: 'Scanned 500 products',                    icon: 'book' },
+  { id: 'streak_3',         name: 'On a Roll',             desc: '3-day scanning streak',                   icon: 'trending-up' },
+  { id: 'streak_7',         name: 'Week Warrior',          desc: '7-day scanning streak',                   icon: 'zap' },
+  { id: 'streak_14',        name: 'Two Week Titan',        desc: '14-day scanning streak',                  icon: 'shield' },
+  { id: 'streak_30',        name: 'Monthly Master',        desc: '30-day scanning streak',                  icon: 'award' },
+  { id: 'streak_90',        name: 'Quarter Champion',      desc: '90-day scanning streak',                  icon: 'crown' },
+  { id: 'first_great',      name: 'Green Light',           desc: 'First product scoring 75+',               icon: 'check-circle' },
+  { id: 'perfect_week',     name: 'Perfect Week',          desc: 'All scans score 60+ in a week',           icon: 'target' },
+  { id: 'health_conscious', name: 'Health Conscious',      desc: '70%+ healthy scans overall',              icon: 'heart' },
+  { id: 'health_master',    name: 'Health Master',         desc: '85%+ healthy scans overall',              icon: 'feather' },
+  { id: 'improving',        name: 'Improving',             desc: 'Avg score improved 10+ pts over last 10', icon: 'activity' },
+  { id: 'level_5',          name: 'Level 5',               desc: 'Reached Level 5',                         icon: 'circle' },
+  { id: 'level_10',         name: 'Level 10',              desc: 'Reached Level 10',                        icon: 'circle' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/**
- * Rank is based on leaderboard position, not points.
- * 1st = Gold, 2nd = Silver, 3rd = Bronze, anything else = Black.
- */
 function getRank(position: number | null) {
   if (position === 1) return { name: 'Gold',   color: '#f59e0b', bg: '#fef3c7', emoji: '🥇' };
   if (position === 2) return { name: 'Silver', color: '#64748b', bg: '#f1f5f9', emoji: '🥈' };
@@ -180,7 +179,6 @@ const AnimatedBackground = () => {
 
   return (
     <View style={StyleSheet.absoluteFillObject}>
-      {/* Gradient Orbs */}
       <Animated.View
         style={[
           styles.orb,
@@ -192,7 +190,7 @@ const AnimatedBackground = () => {
         ]}
       >
         <LinearGradient
-          colors={['rgba(16,185,129,0.15)', 'rgba(5,150,105,0.05)']}
+          colors={['rgba(16,185,129,0.12)', 'rgba(5,150,105,0.04)']}
           style={styles.orbGradient}
         />
       </Animated.View>
@@ -207,12 +205,11 @@ const AnimatedBackground = () => {
         ]}
       >
         <LinearGradient
-          colors={['rgba(59,130,246,0.1)', 'rgba(16,185,129,0.05)']}
+          colors={['rgba(59,130,246,0.08)', 'rgba(16,185,129,0.04)']}
           style={styles.orbGradient}
         />
       </Animated.View>
 
-      {/* Floating Particles */}
       {particles.map((particle, idx) => (
         <Animated.View
           key={idx}
@@ -323,7 +320,6 @@ export default function ProfileScreen() {
   const [saving,           setSaving]           = useState(false);
   const [loggedIn,         setLoggedIn]         = useState(false);
 
-  // Edit state
   const [editUsername,    setEditUsername]    = useState<string | null>(null);
   const [editGoal,        setEditGoal]        = useState<string | null>(null);
   const [editDiet,        setEditDiet]        = useState<string | null>(null);
@@ -331,7 +327,6 @@ export default function ProfileScreen() {
   const [showDietPicker,  setShowDietPicker]  = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
 
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
@@ -350,8 +345,6 @@ export default function ProfileScreen() {
       }),
     ]).start();
   }, []);
-
-  // ── Load data ──────────────────────────────────────────────────────
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -383,7 +376,6 @@ export default function ProfileScreen() {
         setGamification(gamRes.data.stats);
       }
 
-      // Prefer the top-50 entry; fall back to my_rank for users outside top 50
       if (lbRes.ok) {
         const me = lbRes.data?.leaderboard?.find((e: any) => e.is_me);
         if (me) {
@@ -401,8 +393,6 @@ export default function ProfileScreen() {
   }, []);
 
   useEffect(() => { loadData(); }, []);
-
-  // ── Save changes ───────────────────────────────────────────────────
 
   const hasChanges =
     editUsername !== (profile?.username ?? null) ||
@@ -433,14 +423,11 @@ export default function ProfileScreen() {
         : prev
       );
 
-      // Save the updated username to storage so it reflects immediately on the home screen
       if (editUsername !== undefined && editUsername !== profile?.username) {
         const user = await getUser();
         if (user) {
-          // Update the stored user object with the new username
           await AsyncStorage.setItem('user', JSON.stringify({ ...user, username: editUsername }));
         } else if (editUsername) {
-          // If no user exists yet, create a basic user object
           await AsyncStorage.setItem('user', JSON.stringify({ username: editUsername }));
         }
       }
@@ -453,8 +440,6 @@ export default function ProfileScreen() {
       setEditingUsername(false);
     }
   };
-
-  // ── Logout ─────────────────────────────────────────────────────────
 
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -470,8 +455,6 @@ export default function ProfileScreen() {
     ]);
   };
 
-  // ── Derived display values ─────────────────────────────────────────
-
   const points      = gamification?.total_points      ?? 0;
   const streak      = gamification?.current_streak    ?? 0;
   const healthy     = Math.round(gamification?.healthy_percentage ?? 0);
@@ -479,7 +462,6 @@ export default function ProfileScreen() {
   const badges      = gamification?.badges            ?? [];
   const badgesCount = gamification?.badges_count      ?? badges.length;
 
-  // Rank is now derived from leaderboard position, not points
   const rank = getRank(leaderboardRank);
 
   const displayName  = profile?.username ?? 'Guest User';
@@ -488,7 +470,6 @@ export default function ProfileScreen() {
   const goalChanged  = editGoal !== (profile?.health_goal ?? null);
   const dietChanged  = editDiet !== (profile?.dietary_preference ?? null);
 
-  // ── Streak status helper ───────────────────────────────────────────
   const getStreakSubtitle = () => {
     const status  = gamification?.streak_status;
     const longest = gamification?.longest_streak ?? 0;
@@ -497,8 +478,6 @@ export default function ProfileScreen() {
     if (streak >= longest && longest > 0) return 'New record!';
     return `Best: ${longest}d`;
   };
-
-  // ── Loading state ──────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -510,8 +489,6 @@ export default function ProfileScreen() {
       </View>
     );
   }
-
-  // ── Render ─────────────────────────────────────────────────────────
 
   return (
     <View style={styles.root}>
@@ -530,7 +507,7 @@ export default function ProfileScreen() {
         }
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
-          {/* ── Header gradient ── */}
+          {/* ── Header ── */}
           <LinearGradient
             colors={['#059669', '#10b981', '#34d399']}
             start={{ x: 0, y: 0 }}
@@ -609,8 +586,7 @@ export default function ProfileScreen() {
           </LinearGradient>
 
           <View style={styles.body}>
-
-            {/* ── Points / rank card ── */}
+            {/* ── Points / Rank Card ── */}
             <View style={[styles.rankCard, { backgroundColor: rank.bg }]}>
               <View style={styles.rankLeft}>
                 <View style={[styles.trophyCircle, { backgroundColor: rank.color + '22' }]}>
@@ -636,7 +612,7 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* ── Stats grid ── */}
+            {/* ── Stats Grid ── */}
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
                 <View style={[styles.statIcon, { backgroundColor: '#ef444418' }]}>
@@ -669,7 +645,7 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* ── Health goal selector ── */}
+            {/* ── Health Goal ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Feather name="target" size={16} color="#10b981" />
@@ -693,7 +669,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* ── Dietary preference selector ── */}
+            {/* ── Dietary Preference ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Feather name="coffee" size={16} color="#10b981" />
@@ -717,7 +693,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* ── Save button (only when changes exist) ── */}
+            {/* ── Save Button ── */}
             {hasChanges && (
               <TouchableOpacity
                 style={styles.saveBtn}
@@ -742,25 +718,42 @@ export default function ProfileScreen() {
               <View style={styles.sectionHeader}>
                 <Feather name="award" size={16} color="#10b981" />
                 <Text style={styles.sectionTitle}>Achievements</Text>
+                <View style={styles.badgeCountPill}>
+                  <Text style={styles.badgeCountText}>{badgesCount}</Text>
+                </View>
               </View>
               <View style={styles.badgesGrid}>
                 {BADGES.map(badge => {
-                  // badges is now HydratedBadge[] — check by id
                   const earned = Array.isArray(badges) && badges.some((b: any) =>
                     typeof b === 'string' ? b === badge.id : b.id === badge.id
                   );
+                  const badgeColor = earned ? '#10b981' : '#94a3b8';
+                  
                   return (
                     <View key={badge.id} style={[styles.badgeCard, !earned && styles.badgeCardLocked]}>
-                      <View style={[styles.badgeIconWrap, { backgroundColor: earned ? badge.color + '22' : '#f1f5f9' }]}>
-                        <Text style={{ fontSize: 28, color: earned ? badge.color : '#cbd5e1' }}>
-                          {badge.icon}
-                        </Text>
+                      <View style={[
+                        styles.badgeIconWrap,
+                        { 
+                          backgroundColor: earned ? '#10b981' : '#f1f5f9',
+                        }
+                      ]}>
+                        <Feather 
+                          name={badge.icon as any} 
+                          size={22} 
+                          color={earned ? '#fff' : '#cbd5e1'} 
+                        />
                       </View>
-                      <Text style={[styles.badgeName, !earned && styles.badgeNameLocked]}>{badge.name}</Text>
-                      <Text style={styles.badgeDesc}>{badge.desc}</Text>
+                      <Text style={[
+                        styles.badgeName, 
+                        !earned && styles.badgeNameLocked
+                      ]}>{badge.name}</Text>
+                      <Text style={[styles.badgeDesc, !earned && styles.badgeDescLocked]}>
+                        {badge.desc}
+                      </Text>
                       {earned && (
-                        <View style={[styles.earnedPill, { backgroundColor: badge.color + '22' }]}>
-                          <Text style={[styles.earnedPillText, { color: badge.color }]}>Earned</Text>
+                        <View style={styles.earnedPill}>
+                          <Feather name="check" size={10} color="#10b981" />
+                          <Text style={styles.earnedPillText}>Earned</Text>
                         </View>
                       )}
                     </View>
@@ -793,7 +786,6 @@ export default function ProfileScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* ── Pickers ── */}
       <PickerSheet
         visible={showGoalPicker}
         title="Health Goal"
@@ -845,10 +837,9 @@ const styles = StyleSheet.create({
   metaChip:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 },
   metaChipText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
 
-  // Body
   body: { paddingHorizontal: 16, marginTop: -8 },
 
-  // Rank card
+  // Rank Card
   rankCard:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 20, padding: 18, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
   rankLeft:      { flexDirection: 'row', alignItems: 'center', gap: 14 },
   rankRight:     { alignItems: 'flex-end', gap: 6 },
@@ -860,7 +851,7 @@ const styles = StyleSheet.create({
   lbRankChip:    { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.07)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
   lbRankText:    { fontSize: 11, fontWeight: '700', color: '#475569' },
 
-  // Stats grid
+  // Stats Grid
   statsGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 8 },
   statCard:     { width: '47.5%', backgroundColor: '#fff', borderRadius: 18, padding: 14, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   statIcon:     { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
@@ -868,11 +859,22 @@ const styles = StyleSheet.create({
   statLabel:    { fontSize: 11, color: '#64748b', fontWeight: '500', marginTop: 2 },
   statSubtitle: { fontSize: 9, color: '#94a3b8', fontWeight: '500', marginTop: 4, textAlign: 'center' },
 
-  // Section
   section:       { marginTop: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   sectionTitle:  { fontSize: 15, fontWeight: '700', color: '#1e293b', flex: 1 },
   changedDot:    { width: 7, height: 7, borderRadius: 4, backgroundColor: '#f59e0b' },
+  
+  badgeCountPill: { 
+    backgroundColor: '#10b981', 
+    paddingHorizontal: 8, 
+    paddingVertical: 2, 
+    borderRadius: 12,
+  },
+  badgeCountText: { 
+    fontSize: 11, 
+    fontWeight: '700', 
+    color: '#fff',
+  },
 
   // Selector
   selectorBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 },
@@ -881,21 +883,78 @@ const styles = StyleSheet.create({
   selectorText:        { fontSize: 15, fontWeight: '600', color: '#1e293b' },
   selectorPlaceholder: { color: '#94a3b8', fontWeight: '400' },
 
-  // Save button
+  // Save Button
   saveBtn:         { marginTop: 24, borderRadius: 16, overflow: 'hidden', shadowColor: '#10b981', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 2 },
   saveBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15 },
   saveBtnText:     { fontSize: 16, fontWeight: '700', color: '#fff' },
 
-  // Badges
-  badgesGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  badgeCard:       { width: '31%', backgroundColor: '#fff', borderRadius: 16, padding: 12, alignItems: 'center', gap: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 },
-  badgeCardLocked: { opacity: 0.5 },
-  badgeIconWrap:   { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  badgeName:       { fontSize: 11, fontWeight: '700', color: '#1e293b', textAlign: 'center' },
-  badgeNameLocked: { color: '#94a3b8' },
-  badgeDesc:       { fontSize: 9, color: '#94a3b8', textAlign: 'center', lineHeight: 13 },
-  earnedPill:      { marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 },
-  earnedPillText:  { fontSize: 9, fontWeight: '700' },
+  // Badges - Modern Unified Design
+  badgesGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 10,
+  },
+  badgeCard: { 
+    width: '31%', 
+    backgroundColor: '#fff', 
+    borderRadius: 16, 
+    padding: 14, 
+    alignItems: 'center', 
+    gap: 4, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.04, 
+    shadowRadius: 4, 
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  badgeCardLocked: { 
+    opacity: 0.65,
+    borderColor: '#f1f5f9',
+  },
+  badgeIconWrap: { 
+    width: 48, 
+    height: 48, 
+    borderRadius: 14, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginBottom: 8,
+  },
+  badgeName: { 
+    fontSize: 10, 
+    fontWeight: '700', 
+    color: '#1e293b', 
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  badgeNameLocked: { 
+    color: '#94a3b8',
+  },
+  badgeDesc: { 
+    fontSize: 8, 
+    color: '#94a3b8', 
+    textAlign: 'center', 
+    lineHeight: 12,
+  },
+  badgeDescLocked: {
+    color: '#cbd5e1',
+  },
+  earnedPill: { 
+    marginTop: 4, 
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8, 
+    paddingVertical: 2, 
+    borderRadius: 99,
+    backgroundColor: '#f0fdf4',
+  },
+  earnedPillText: { 
+    fontSize: 8, 
+    fontWeight: '700',
+    color: '#10b981',
+  },
 
   // Actions
   actionsSection:  { marginTop: 28, gap: 10 },
@@ -904,7 +963,7 @@ const styles = StyleSheet.create({
   actionIcon:      { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   actionLabel:     { flex: 1, fontSize: 15, fontWeight: '600', color: '#1e293b' },
 
-  // Picker sheet
+  // Picker Sheet
   pickerBackdrop:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   pickerSheet:             { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 24, maxHeight: height * 0.75 },
   pickerHandle:            { width: 40, height: 4, backgroundColor: '#e2e8f0', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 16 },
