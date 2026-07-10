@@ -17,6 +17,7 @@ export default function RootLayout() {
       <Stack.Screen name="scanner" options={{ headerShown: false }} />
       <Stack.Screen name="history" options={{ headerShown: false }} />
       <Stack.Screen name="analytics" options={{ headerShown: false }} />
+      <Stack.Screen name="leaderboard" options={{ headerShown: false }} />
     </Stack>
   );
 }
