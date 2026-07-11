@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_BASE_URL = 'http://192.168.2.142:3000';
+export const API_BASE_URL = 'http://192.168.4.142:3000';
 
 export async function apiFetch(
   endpoint: string,
@@ -135,13 +135,18 @@ export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
 
 // ── Products / Scanning ────────────────────────────────────
 
+// NOTE: nutrient fields are now nullable. Previously they were plain
+// `number`, which forced buildProductFromAlternative() to silently
+// substitute 0 for genuinely missing data — that's the bug that made
+// PH-alternative nutrition tables show "0.0" for everything instead of
+// "—". Consumers (NutrientRow etc.) already handle null/undefined fine.
 export interface ProductNutrients {
-  sugar_g:         number;
-  saturated_fat_g: number;
-  sodium_mg:       number;
-  energy_kcal:     number;
-  fiber_g:         number;
-  protein_g:       number;
+  sugar_g:         number | null;
+  saturated_fat_g: number | null;
+  sodium_mg:       number | null;
+  energy_kcal:     number | null;
+  fiber_g:         number | null;
+  protein_g:       number | null;
   nova_group:      number | null;
   additives_count: number;
 }
@@ -238,14 +243,18 @@ export async function fetchProduct(barcode: string): Promise<ProductData> {
 
 // ── Nutrient coalesce helper ───────────────────────────────────────────────────
 //
-// Returns `a` if it is a real positive number; otherwise returns `b`.
-// Used throughout buildProductFromAlternative to prefer Gemini nutrient
-// values over zeros or nulls that may come from incomplete data sources.
+// Returns the value if it is a real positive number; otherwise returns null.
 //
-function coalesceNutrient(a: number | null | undefined, b: number | null | undefined): number {
-  if (a != null && a > 0) return a;
-  if (b != null && b > 0) return b;
-  return 0;
+// IMPORTANT: this used to default to 0 when data was missing, which made
+// PH-alternative nutrition tables silently render "0.0 g / 0 kcal" instead
+// of surfacing that the data simply wasn't there. Returning null lets
+// NutrientRow show "—" for truly missing fields, which is both more honest
+// and much easier to debug (a wall of "—" immediately tells you the
+// backend isn't sending nutrition data, whereas a wall of "0.0" looks like
+// a plausible, if suspicious, result).
+//
+function coalesceNutrient(value: number | null | undefined): number | null {
+  return value != null && value > 0 ? value : null;
 }
 
 // ── Build a ProductData locally from a PH alternative ─────────────────────────
@@ -254,8 +263,8 @@ function coalesceNutrient(a: number | null | undefined, b: number | null | undef
 // barcodes so we never hit the API. Instead we reconstruct a full ProductData
 // from the _nutrients already embedded in the Alternative object.
 //
-// Gemini nutrient values are treated as authoritative.  Any value that is
-// 0, null, or undefined is replaced by the Gemini estimate (coalesceNutrient).
+// Any nutrient value that is 0, null, or undefined is treated as genuinely
+// missing (see coalesceNutrient above) and rendered as "—" rather than "0".
 //
 // The returned object is structurally identical to what fetchProduct() returns,
 // so the scanner sheet renders it exactly the same way as a real scan.
@@ -263,29 +272,31 @@ function coalesceNutrient(a: number | null | undefined, b: number | null | undef
 export function buildProductFromAlternative(alt: Alternative): ProductData {
   const n = alt._nutrients;
 
-  // ── Use Gemini values; fall back to 0 only for truly absent nutrients ─────
-  const energy_kcal     = coalesceNutrient(n?.energy_kcal_100g,     null);
-  const sugar_g         = coalesceNutrient(n?.sugars_100g,           null);
-  const saturated_fat_g = coalesceNutrient(n?.['saturated-fat_100g'], null);
-  // sodium: stored in grams by Gemini/backend; multiply ×1000 for display (mg)
+  const energy_kcal     = coalesceNutrient(n?.energy_kcal_100g);
+  const sugar_g         = coalesceNutrient(n?.sugars_100g);
+  const saturated_fat_g = coalesceNutrient(n?.['saturated-fat_100g']);
+  // sodium: stored in grams by backend; multiply ×1000 for display (mg)
   const sodium_mg       = n?.sodium_100g != null && n.sodium_100g > 0
     ? n.sodium_100g * 1000
-    : 0;
-  const fiber_g         = coalesceNutrient(n?.fiber_100g,            null);
-  const protein_g       = coalesceNutrient(n?.proteins_100g,         null);
+    : null;
+  const fiber_g         = coalesceNutrient(n?.fiber_100g);
+  const protein_g       = coalesceNutrient(n?.proteins_100g);
   const nova_group      = n?.nova_group  ?? null;
   const additives_tags  = n?.additives_tags ?? [];
 
   // ── Score — mirrors backend scoring logic ─────────────────────────────────
-  const penaltySugar      = Math.min(30, (sugar_g / 10) * 15);
-  const penaltySatFat     = Math.min(20, (saturated_fat_g / 5) * 10);
-  const penaltySodium     = Math.min(20, (sodium_mg / 400) * 10);
-  const penaltyEnergy     = Math.min(10, (energy_kcal / 200) * 5);
+  // Null nutrients are treated as 0 for the *scoring math only* (a missing
+  // value shouldn't be penalized, but it also shouldn't crash the formula).
+  // The displayed table still shows "—" for these via the raw values above.
+  const penaltySugar      = Math.min(30, ((sugar_g ?? 0) / 10) * 15);
+  const penaltySatFat     = Math.min(20, ((saturated_fat_g ?? 0) / 5) * 10);
+  const penaltySodium     = Math.min(20, ((sodium_mg ?? 0) / 400) * 10);
+  const penaltyEnergy     = Math.min(10, ((energy_kcal ?? 0) / 200) * 5);
   const penaltyProcessing = nova_group === 4 ? 15 : nova_group === 3 ? 5 : 0;
   const penaltyAdditives  = Math.min(10, additives_tags.length * 1.5);
 
-  const bonusFiber   = Math.min(10, (fiber_g / 3) * 5);
-  const bonusProtein = Math.min(10, (protein_g / 10) * 5);
+  const bonusFiber   = Math.min(10, ((fiber_g ?? 0) / 3) * 5);
+  const bonusProtein = Math.min(10, ((protein_g ?? 0) / 10) * 5);
 
   const uncapped = 100
     - penaltySugar
@@ -345,18 +356,21 @@ export function buildProductFromAlternative(alt: Alternative): ProductData {
   };
 
   // ── Warnings ─────────────────────────────────────────────────────────────
+  // Guard with `?? 0` for the comparison, but only push the message (and
+  // format with .toFixed) when the value is genuinely present — otherwise
+  // we'd risk printing "High sugar: 0.0g" for a product with unknown sugar.
   const warnings: string[] = [];
-  if (sugar_g > 15)            warnings.push(`High sugar: ${sugar_g.toFixed(1)}g per 100g`);
-  if (saturated_fat_g > 5)     warnings.push(`High saturated fat: ${saturated_fat_g.toFixed(1)}g per 100g`);
-  if (sodium_mg > 600)         warnings.push(`High sodium: ${sodium_mg.toFixed(0)}mg per 100g`);
-  if (nova_group === 4)        warnings.push('Ultra-processed food (NOVA 4)');
-  if (additives_tags.length > 5) warnings.push(`${additives_tags.length} additives detected`);
+  if (sugar_g != null && sugar_g > 15)                 warnings.push(`High sugar: ${sugar_g.toFixed(1)}g per 100g`);
+  if (saturated_fat_g != null && saturated_fat_g > 5)   warnings.push(`High saturated fat: ${saturated_fat_g.toFixed(1)}g per 100g`);
+  if (sodium_mg != null && sodium_mg > 600)             warnings.push(`High sodium: ${sodium_mg.toFixed(0)}mg per 100g`);
+  if (nova_group === 4)                                 warnings.push('Ultra-processed food (NOVA 4)');
+  if (additives_tags.length > 5)                        warnings.push(`${additives_tags.length} additives detected`);
 
   // ── Tips ─────────────────────────────────────────────────────────────────
   const tips: string[] = [];
-  if (fiber_g > 3)    tips.push(`Good source of fibre (${fiber_g.toFixed(1)}g per 100g).`);
-  if (protein_g > 10) tips.push(`High in protein (${protein_g.toFixed(1)}g per 100g).`);
-  if (alt.where_to_buy) tips.push(`Available at: ${alt.where_to_buy}`);
+  if (fiber_g != null && fiber_g > 3)       tips.push(`Good source of fibre (${fiber_g.toFixed(1)}g per 100g).`);
+  if (protein_g != null && protein_g > 10)  tips.push(`High in protein (${protein_g.toFixed(1)}g per 100g).`);
+  if (alt.where_to_buy)                     tips.push(`Available at: ${alt.where_to_buy}`);
 
   // ── Description ───────────────────────────────────────────────────────────
   // Prefer the dedicated `description` field from Gemini (2-3 sentences);
