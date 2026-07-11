@@ -251,6 +251,12 @@ export default function ScannerScreen() {
     setTimeout(() => {
       try {
         const p = buildProductFromAlternative(alt);
+        // CRITICAL FIX: Ensure the score from the alternative is preserved
+        // The buildProductFromAlternative function should use the alt.score value
+        // But if it's setting it to 100, we need to override it
+        if (alt.score !== undefined && alt.score !== null) {
+          p.evaluation.score = alt.score;
+        }
         setProduct(p);
         // CRITICAL FIX: Don't clear originalProduct when loading PH alternative
         // Keep originalProduct unchanged (the original scanned product)
@@ -294,6 +300,10 @@ export default function ScannerScreen() {
     setTimeout(() => {
       try {
         const p = buildProductFromAlternative(alt);
+        // CRITICAL FIX: Ensure the score from the alternative is preserved
+        if (alt.score !== undefined && alt.score !== null) {
+          p.evaluation.score = alt.score;
+        }
         setProduct(p);
         currentAltsRef.current = [];
         setScanState("result");
